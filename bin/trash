@@ -1,0 +1,16 @@
+#!/bin/bash
+
+if [ -d $HOME/.trash ]; then
+	TRASHFOLDER=$HOME/.trash
+else
+	mkdir $HOME/.trash;
+	if [ "$?" != "0" ]; then
+		echo "Could not create $HOME/trash. Aborted";
+		exit 1;
+	fi
+fi
+
+for i in $*
+do
+	mv -r $i /.trash
+done

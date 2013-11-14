@@ -1,0 +1,48 @@
+#!/bin/bash
+
+# Instalação:
+# Colocar este script em uma pasta enxergada pelo PATH
+#
+# Uso do cecho:
+#
+#    cecho <cor> <texto>
+#       faz um echo na cor desejada. Escapes são aceitos, e não pula
+#       linha automaticamente
+#
+#    cecho <cor> keep [texto]
+#       altera a cor corrente para a cor desejada
+#
+#    cecho reset keep
+#       reseta a cor do terminal
+
+
+case "$1" in
+	"black") COR="00;30" ;;
+	"dgray") COR="01;30" ;;
+	"dblue") COR="00;34" ;;
+	"blue") COR="01;34" ;;
+	"dgreen") COR="00;32" ;;
+	"green") COR="01;32" ;;
+	"dcyan") COR="00;36" ;;
+	"cyan") COR="01;36" ;;
+	"dred") COR="00;31" ;;
+	"red") COR="01;31" ;;
+	"dpurple") COR="00;35" ;;
+	"purple") COR="01;35" ;;
+	"dyellow") COR="00;33" ;;
+	"yellow") COR="01;33" ;;
+	"gray") COR="00;37" ;;
+	"white") COR="01;37" ;;
+	"reset") COR="00" ;;	
+
+	*) COR="00;37";;
+	
+esac
+
+if [ "$2" == "keep" ]; then
+	TEXTO=$3
+	echo -n -e "\e["$COR"m$TEXTO"	
+else
+	TEXTO=$2
+	echo -n -e "\e["$COR"m$TEXTO\e[00m"
+fi

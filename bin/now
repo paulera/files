@@ -1,0 +1,4 @@
+#!/bin/bash
+#desc:Retorna o horario atual no formato HH:MM:SS
+date +"%T"
+

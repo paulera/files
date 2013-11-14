@@ -1,0 +1,36 @@
+#!/bin/bash
+
+# ----------------------------------------------------------------------
+# Edit your ~/.bashrc ou /etc/bah.bashrc file, and make it run this file
+# if [ -f ~/files/bash.d/run_bash ]; then . ~/files/bash.d/run_bash; fi
+# ----------------------------------------------------------------------
+
+if [ ! -z $BASH_SOURCE ]; then
+	#using bash 3 or higher
+	BASHDFOLDER=$(dirname $BASH_SOURCE)
+else
+	BASHDFOLDER=$(dirname $0)
+fi
+
+if [ -d $BASHDFOLDER ]; then
+	for i in $BASHDFOLDER/*.sh; do
+		if [ -r $i ]; then
+			. $i
+		fi
+	done
+	unset i
+else
+	echo "run_bash: Problems with directories structure. Aborted!"
+fi
+
+BASHDFOLDER=$(readlink -m ~)"/bash.d"
+
+if [ -d $BASHDFOLDER ]; then
+	for i in $BASHDFOLDER/*.sh; do
+		if [ -r $i ]; then
+			echo $i
+			. $i
+		fi
+	done
+	unset i
+fi

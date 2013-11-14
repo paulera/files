@@ -1,0 +1,4 @@
+#!/bin/bash
+#desc:Retorna a data atual, no formato YYYY-MM-DD
+date +"%Y-%m-%d"
+
