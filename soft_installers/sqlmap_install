@@ -1,0 +1,16 @@
+#!/bin/bash
+
+# CONFIGURATION ######################
+
+APPNAME="sqlmap"
+
+######################################
+
+. installer_base.sh
+installer_bootstrap
+
+git clone https://github.com/sqlmapproject/sqlmap.git $APPFOLDER
+
+link_bin "$APPFOLDER/sqlmap.py" "sqlmap"
+
+
