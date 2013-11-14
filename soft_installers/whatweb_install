@@ -1,0 +1,16 @@
+#!/bin/bash
+
+# CONFIGURATION ######################
+
+APPNAME="whatweb"
+
+######################################
+
+. installer_base.sh
+installer_bootstrap
+
+git clone https://github.com/urbanadventurer/WhatWeb/ $APPFOLDER
+
+link_bin "$APPFOLDER/whatweb" "whatweb"
+
+
