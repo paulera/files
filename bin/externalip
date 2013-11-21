@@ -6,4 +6,5 @@ elif [ "$(which w3m)" != "" ]; then
 	w3m -dump http://ipecho.net/plain
 else
 	echo "You must have 'lynx' or 'w3m' installed to use this command";
+	exit 1;
 fi
