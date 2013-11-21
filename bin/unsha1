@@ -1,0 +1,12 @@
+#!/bin/bash
+
+# Alternative address if ipecho is down: http://wtfismyip.com/text
+
+if [ "$(which lynx)" != "" ]; then
+	lynx -dump "https://www.insomnia247.nl/hash_api.php?type=sha1&hash=$1" | sed 's/\s//g' | head -n 1
+elif [ "$(which w3m)" != "" ]; then
+	w3m -dump "https://www.insomnia247.nl/hash_api.php?type=sha1&hash=$1"
+else
+	echo "You must have 'lynx' or 'w3m' installed to use this command";
+	exit 1;
+fi
