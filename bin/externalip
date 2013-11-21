@@ -1,5 +1,7 @@
 #!/bin/bash
 
+# Alternative address if ipecho is down: http://wtfismyip.com/text
+
 if [ "$(which lynx)" != "" ]; then
 	lynx -dump http://ipecho.net/plain | sed 's/\s//g' | head -n 1
 elif [ "$(which w3m)" != "" ]; then
