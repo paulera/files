@@ -8,12 +8,13 @@ git clone https://github.com/paulera/files
 cp ~/.bashrc ~/.bashrc.old
 echo "if [ -f ~/files/bash.d/run_bash ]; then . ~/files/bash.d/run_bash; fi" >> ~/.bashrc
 ```
-#### For all users (suggestion: inside */opt* folder) ####
+~~#### For all users (suggestion: inside */opt* folder) ####~~
+This option is with some bugs actually...
 ``` bash
-cd /opt
-sudo git clone https://github.com/paulera/files
-sudo cp /etc/bash.bashrc /etc/bash.bashrc.old
-sudo echo "if [ -f /opt/files/bash.d/run_bash ]; then . /opt/files/bash.d/run_bash; fi" >> /etc/bash.bashrc
+## cd /opt
+## sudo git clone https://github.com/paulera/files
+## sudo cp /etc/bash.bashrc /etc/bash.bashrc.old
+## sudo echo "if [ -f /opt/files/bash.d/run_bash ]; then . /opt/files/bash.d/run_bash; fi" >> /etc/bash.bashrc
 ```
 Note that these commands will:
 - create a folder *files*
