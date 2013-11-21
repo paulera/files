@@ -1,0 +1,9 @@
+#!/bin/bash
+
+if [ "$(which lynx)" != "" ]; then
+	lynx -dump http://ipecho.net/plain | sed 's/\s//g' | head -n 1
+elif [ "$(which w3m)" != "" ]; then
+	w3m -dump http://ipecho.net/plain
+else
+	echo "You must have 'lynx' or 'w3m' installed to use this command";
+fi
