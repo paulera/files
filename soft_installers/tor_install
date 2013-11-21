@@ -1,0 +1,56 @@
+#!/bin/bash
+
+# CONFIGURATION ######################
+
+APPNAME="tor"
+
+######################################
+
+. installer_base.sh
+installer_bootstrap
+
+TORBASEURL="https://www.torproject.org/dist/"
+if [ "$(which lynx)" != "" ]; then
+	TORFILENAME=$(lynx -dump https://www.torproject.org/dist/ | grep "tor-" | grep -v TXT | grep -v alpha | grep -v rc.tar | awk -F] '{ print $ 3;  }' | awk '{ print $1; }' | head -n 1)
+elif [ "$(which w3m)" != "" ]; then
+	TORFILENAME=$(w3m -dump https://www.torproject.org/dist/ | grep "tor-" | grep -v TXT | grep -v alpha | grep -v rc.tar | awk -F] '{ print $ 2;  }' | awk '{ print $1; }' | head -n 1)
+else
+	echo "Yout must have 'w3m' or 'lynx' installed to proceed."
+	abort_install
+fi
+TORNAME=$(sed 's/.tar.gz//g' <<< "$TORFILENAME")
+
+echo ""
+echo "DOWNLOADING TOR"
+echo
+
+cd $APPFOLDER
+download $TORBASEURL$TORFILENAME
+
+if [ ! -f "$TORFILENAME" ]; then
+	echo "Error downloading TOR."
+	abort_install
+fi
+
+
+echo ""
+echo "EXTRACTING FILES"
+echo ""
+
+tar xvzf $TORFILENAME
+
+echo ""
+echo "ORGANIZING $APPFOLDER"
+echo ""
+
+mv $TORNAME/* .
+rm -r $TORNAME
+rm $TORFILENAME
+
+echo ""
+echo "CONFIGURE && MAKE"
+echo ""
+
+./configure && make && link_bin "$APPFOLDER/src/or/tor" "tor"
+
+
