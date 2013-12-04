@@ -1,0 +1,12 @@
+#!/bin/bash
+
+INTERVAL="1"
+
+while :; do
+	clear
+	echo "Command: $*"
+	echo "$(date)"
+	echo "------------------------------"
+	$*
+	sleep $INTERVAL
+done
