@@ -8,13 +8,18 @@ git clone https://github.com/paulera/files
 cp ~/.bashrc ~/.bashrc.old
 echo "if [ -f ~/files/bash.d/run_bash ]; then . ~/files/bash.d/run_bash; fi" >> ~/.bashrc
 ```
-~~#### For all users (suggestion: inside */opt* folder) ####~~
-This option is with some bugs actually...
+#### For all users (suggestion: inside */opt* folder) ####
+
 ``` bash
-## cd /opt
-## sudo git clone https://github.com/paulera/files
-## sudo cp /etc/bash.bashrc /etc/bash.bashrc.old
-## sudo echo "if [ -f /opt/files/bash.d/run_bash ]; then . /opt/files/bash.d/run_bash; fi" >> /etc/bash.bashrc
+cd /opt
+sudo git clone https://github.com/paulera/files
+sudo cp /etc/bash.bashrc /etc/bash.bashrc.old
+
+# You must add the run_bash call in each user's .bashrc file
+echo "if [ -f /opt/files/bash.d/run_bash ]; then . /opt/files/bash.d/run_bash; fi" >> /home/user/.bashrc
+
+# Do this to enable to the root user
+echo "if [ -f /opt/files/bash.d/run_bash ]; then . /opt/files/bash.d/run_bash; fi" >> /root/.bashrc
 ```
 Note that these commands will:
 - create a folder *files*
@@ -78,7 +83,8 @@ A smart shortcut first looks for the folder inside home folder. If the user have
 - **_dirsize_**: list the size of everything, in the current dir
 - **_now_**: actual time in HH:MM:SS (24h format)
 - **_psaux_** <name to grep>: do the ps aux, grepping the parameter - ex: psaux java
-- **_scriptme_**: one of my favourites. Create a script inside _~/bin_ and edits it in vim. It will start with the **_$FILESROOT/script_template_** contents, and will have **_chmod_ +x* if you leave vim saving it.
+- **_scriptme_**: one of my favourites. Create a script inside _~/bin_ and edits it in vim. It will start with the **$FILESROOT/script_template** contents, and will have **_chmod_ +x* if you leave vim saving it.
+- **_doloop_** <command>: Execute the command, repeatedly, with 1 second pause, clearing screen. Some bugs when using piped commands.
 
 #### TO-DO list: ####
 
