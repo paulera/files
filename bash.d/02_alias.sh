@@ -13,5 +13,5 @@ alias mkdir='mkdir -p'
 alias ff='grep --color=always -B2 -F2 -i -n -H -a'
 
 #vim - using custom configuration file
-vim='vim -u $FILESROOT/vimrc'
+alias vim='vim -u $FILESROOT/vimrc'
 
