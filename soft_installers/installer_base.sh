@@ -1,3 +1,5 @@
+#!/bin/bash
+
 abort_install() {
 	echo "Aborted"
 	echo ""
