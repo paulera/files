@@ -56,6 +56,13 @@ set softtabstop=4
 set nowrap			" don't wrap lines
 set number			" show numbers
 
+" Fix arrows keys - might be needed in some environments
+" In insert mode, press <Ctrl+V>+key to generate the ^[XX value
+"imap ^[OC <ESC>li
+"imap ^[OA <ESC>kli
+"imap ^[OB <ESC>jli
+"imap ^[OD <ESC>hi
+
 " --------------------------- THEME -------------------------------- "
 
 set t_Co=256 " enable 256 colors terminal
