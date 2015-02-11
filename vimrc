@@ -75,5 +75,5 @@ highlight Special    ctermfg=10   cterm=BOLD
 highlight LineNr     ctermfg=DarkGrey
 highlight Normal     ctermfg=LightGrey	ctermbg=Black
 highlight Visual										cterm=reverse
-highlight Comment    ctermfg=DarkGreen
+highlight Comment    ctermfg=DarkGray
 highlight NonText    ctermfg=DarkBlue					cterm=NONE
