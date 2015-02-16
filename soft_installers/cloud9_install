@@ -1,0 +1,10 @@
+#!/bin/bash
+
+# Install required packages
+apt-get update && apt-get install git-core g++ curl libssl-dev apache2-utils python
+
+# Install cloud9 project
+cd /opt && git clone git://github.com/ajaxorg/cloud9.git && cd /opt/cloud9 && git submodule update --init
+
+# Download source and build nodejs
+cd /opt && git clone git://github.com/ry/node.git && cd /opt/node && chmod +x configure && ./configure && make && make install
