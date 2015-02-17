@@ -1,10 +1,23 @@
 #!/bin/bash
 
 # Install required packages
-apt-get update && apt-get install -y git-core g++ curl libssl-dev apache2-utils python
-
-# Install cloud9 project
-cd /opt && git clone git://github.com/ajaxorg/cloud9.git && cd /opt/cloud9 && git submodule update --init
+apt-get update && apt-get install git-core g++ curl libssl-dev apache2-utils python
 
 # Download source and build nodejs
-cd /opt && git clone git://github.com/ry/node.git && cd /opt/node && chmod +x configure && ./configure && make && make install
+# alternative: git://github.com/ry/node.git
+cd /opt && git clone https://github.com/joyent/node.git && cd /opt/node && chmod +x configure && ./configure && make && make install
+
+# Install cloud9 dependencies
+curl -L https://raw.githubusercontent.com/c9/install/master/install.sh | bash
+
+# Install cloud9 project
+cd /opt
+git clone http://github.com/c9/core.git c9sdk
+cd /opt/c9sdk
+/opt/c9sdk/scripts/install-sdk.sh
+
+# Finished
+echo
+echo ---------------------------------------------------------------------
+echo
+echo "run 'node /opt/c9sdk/server.js -p 8181 -l 0.0.0.0' to launch Cloud9"
