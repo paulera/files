@@ -15,3 +15,4 @@ else
 	echo "00_exports.sh: Problems with directories structure. Aborted!"
 fi
 
+export HISTFILESIZE=9000
