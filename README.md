@@ -81,10 +81,17 @@ A smart shortcut first looks for the folder inside home folder. If the user have
 
 - **_cecho_**: colored echo - usage: **_cecho_ green "It's OK!\n"**
 - **_dirsize_**: list the size of everything, in the current dir
-- **_now_**: actual time in HH:MM:SS (24h format)
-- **_psaux_** <name to grep>: do the ps aux, grepping the parameter - ex: psaux java
-- **_scriptme_**: one of my favourites. Create a script inside _~/bin_ and edits it in vim. It will start with the **$FILESROOT/script_template** contents, and will have **_chmod_ +x* if you leave vim saving it.
 - **_doloop_** <command>: Execute the command, repeatedly, with 1 second pause, clearing screen. Some bugs when using piped commands.
+- **_externalip_**: return the IP address seen by the web
+- **_localip_**: return the local network IP address
+- **_now_**: current time in HH:MM:SS (24h format)
+- **_psaux_** <name to grep>: do the ps aux, grepping the parameter - ex: psaux java
+- **_remove_cr_**: Fix all lines in a file (or all files in current folder) to make them end with just LF, removing all CR characters.
+- **_scriptme_**: one of my favourites. Create a script inside _~/bin_ and edits it in vim. It will start with the **$FILESROOT/script_template** contents, and will have **_chmod_ +x* if you leave vim saving it.
+- **_today_**: current date as YYYY-MM-DD
+- **_trash_**: send files to ~/.trash
+- **_unmd5_**: Uses Insomnia247.nl Hashdb API to lookup a MD5 hash
+- **_unsha1_**: Uses Insomnia247.nl Hashdb API to lookup a SHA1 hash
 
 #### TO-DO list: ####
 
