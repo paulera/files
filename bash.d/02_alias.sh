@@ -11,7 +11,3 @@ alias mkdir='mkdir -p'
 
 # ff (find in files): uses grep --color=always to highlight the searched text
 alias ff='grep --color=always -B2 -F2 -i -n -H -a'
-
-#vim - using custom configuration file
-alias vim='vim -u $FILESROOT/vimrc'
-
