@@ -1,0 +1,20 @@
+#!/bin/bash
+
+VIMRC_DEST=~/.vim
+
+if [ -f "$VIMRC_DEST/vimrc" ] || [ -h "$VIMRC_DEST/vimrc" ]; then
+	echo "Manually remove $VIMRC_DEST/vimrc and try running this script again";
+	exit 1;
+else
+	if [ ! -d "$VIMRC_DEST" ]; then
+		mkdir "$VIMRC_DEST";
+	fi
+
+	if [ ! -d "$VIMRC_DEST" ]; then
+		echo "Failed to create the folder $VIMRC_DEST";
+	fi
+
+	echo "Creating link $VIMRC_DEST/vimrc -> $FILESROOT/vimrc";
+	ln -s "$FILESROOT/vimrc" "$VIMRC_DEST/vimrc";
+fi
+
