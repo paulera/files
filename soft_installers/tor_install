@@ -51,6 +51,6 @@ echo ""
 echo "CONFIGURE && MAKE"
 echo ""
 
-./configure && make && link_bin "$APPFOLDER/src/or/tor" "tor"
+./configure && make && link_bin "$APPFOLDER/src/tor/tor" "tor"
 
 

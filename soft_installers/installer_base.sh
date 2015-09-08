@@ -41,22 +41,26 @@ check_filesroot() {
 
 check_soft() {
 
-
-
-	if [ ! -d "$FILESROOT/soft" ]; then
-		echo "$FILESROOT/soft not found, will create it."
-		\mkdir -p $FILESROOT/soft
+	if [ ! -d "$FILESROOT/soft/bin" ]; then
+		echo "$FILESROOT/soft/bin not found, will create it."
+		\mkdir -p $FILESROOT/soft/bin
 	fi
 
-	if [ ! -d "$FILESROOT/soft" ]; then
+	if [ ! -d "$FILESROOT/soft/bin" ]; then
 		echo ""
-		echo "soft folder expected as $FILESROOT/soft, but not found."
+		echo "soft and bin folders expected as $FILESROOT/soft/bin, but not found."
 		abort_install
 	fi
-	
+
 	if [ ! -w "$FILESROOT/soft" ]; then
 		echo ""
 		echo "You must have write permissions on $FILESROOT/soft"
+		abort_install
+	fi
+	
+	if [ ! -w "$FILESROOT/soft/bin" ]; then
+		echo ""
+		echo "You must have write permissions on $FILESROOT/soft/bin"
 		abort_install
 	fi
 }
@@ -119,7 +123,7 @@ link_bin () {
 	fi
 	
 	TARGET=$1
-	LINKNAME=$FILESROOT"/bin/"$2
+	LINKNAME=$FILESROOT"/soft/bin/"$2
 	
 	if [ -h "$LINKNAME" ]; then
 		echo -n "Unlinking $LINKNAME... "
