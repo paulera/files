@@ -40,6 +40,14 @@ check_filesroot() {
 }
 
 check_soft() {
+
+
+
+	if [ ! -d "$FILESROOT/soft" ]; then
+		echo "$FILESROOT/soft not found, will create it."
+		\mkdir -p $FILESROOT/soft
+	fi
+
 	if [ ! -d "$FILESROOT/soft" ]; then
 		echo ""
 		echo "soft folder expected as $FILESROOT/soft, but not found."
