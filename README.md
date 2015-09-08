@@ -95,6 +95,5 @@ A smart shortcut first looks for the folder inside home folder. If the user have
 
 #### TO-DO list: ####
 
-- Create *$FILESROOT/bash.d/09_vimrc.sh*: Apply custom vimrc configuration from the file *$FILESROOT/vimrc*
 - More links in this description
 - Create a _install_ folder inside _soft_ folder, with scripts that automatically downloads and make links based on _$FILESROOT_ path
