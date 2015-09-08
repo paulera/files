@@ -1,0 +1,10 @@
+#!/bin/bash
+
+
+
+if [ ! -z $(which lynx) ]; then
+	lynx -nolist -dump $1
+elif [ ! -z $(which w3m) ]; then
+    w3m -dump $1
+fi
+

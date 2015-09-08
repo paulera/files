@@ -1,0 +1,2 @@
+#!/bin/bash
+wsrc $1 | tidy --indent auto --indent-spaces 4 --quiet yes --show-warnings false --uppercase-tags true --wrap 120 --wrap-attributes false
