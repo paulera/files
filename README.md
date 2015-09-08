@@ -94,6 +94,5 @@ A smart shortcut first looks for the folder inside home folder. If the user have
 - **_unsha1_**: Uses Insomnia247.nl Hashdb API to lookup a SHA1 hash
 
 #### TO-DO list: ####
-
-- More links in this description
-- Create a _install_ folder inside _soft_ folder, with scripts that automatically downloads and make links based on _$FILESROOT_ path
+- Document set_defaults folder
+- Document the soft installers
