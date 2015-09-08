@@ -53,6 +53,9 @@ set shiftwidth=4	" size of an indent
 " other than the (hard)tabstop
 set softtabstop=4
 
+" BACKSPACE FIX
+set backspace=indent,eol,start
+
 set nowrap			" don't wrap lines
 set number			" show numbers
 
