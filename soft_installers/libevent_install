@@ -1,0 +1,29 @@
+#!/bin/bash
+
+# CONFIGURATION ######################
+
+APPNAME="libevent"
+
+######################################
+
+. installer_base.sh
+installer_bootstrap
+
+cd $APPFOLDER
+
+mkdir source-libevent
+cd source-libevent
+
+git clone https://github.com/libevent/libevent.git
+cd libevent
+
+echo ""
+echo "CONFIGURE && MAKE"
+echo ""
+
+export SHELLOPTS
+set -o igncr
+
+./autogen.sh && ./configure && make && echo "ok"
+
+
