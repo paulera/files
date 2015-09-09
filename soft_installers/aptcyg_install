@@ -1,0 +1,17 @@
+#!/bin/bash
+
+# CONFIGURATION ######################
+
+APPNAME="apt-cyg"
+
+######################################
+
+. installer_base.sh
+installer_bootstrap
+
+URL="https://raw.githubusercontent.com/transcode-open/apt-cyg/master/apt-cyg"
+
+wsrc $URL > $APPFOLDER/apt-cyg && link_bin "$APPFOLDER/apt-cyg" "apt-cyg"
+
+# cat apt-cyg | sed 's/md5sum/sha512sum/g' | sed 's/\(# check the md5\)/\1\n    # changed to sha512sum\n    # see http\:\/\/superuser\.com\/questions\/894696\/apt\-cyg\-install\-return\-md5sum\-error/g' | less > apt-cyg-sha512 && link_bin "$APPFOLDER/apt-cyg-sha512" "apt-cyg-sha512" 
+
