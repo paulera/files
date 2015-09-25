@@ -1,0 +1,13 @@
+#!/bin/bash
+
+i=0
+while read -r l; do
+	((++i))
+
+	if [ -z $1 ]; then
+		echo -e "$i\t$l"
+	elif [ "$1" == "$i" ]; then
+		echo $l | sed 's/^[^[:blank:]]\+[[:blank:]]\+//g'
+	fi
+done < <(git status -s);
+
