@@ -13,4 +13,11 @@ git clone https://github.com/urbanadventurer/WhatWeb/ $APPFOLDER
 
 link_bin "$APPFOLDER/whatweb" "whatweb"
 
-
+echo
+cecho white "Remember to install the packages "
+cecho green "ruby"
+cecho white " and "
+cecho green "rubygems"
+cecho white "."
+echo
+echo
