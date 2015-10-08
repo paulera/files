@@ -1,8 +1,3 @@
-#!/bin/bash
-# Shows the local IP for this machine
-
-if [ ! -z $1 ]; then
-  INTERFACE=$1
-fi
-
-ip -o -4 addr show $INTERFACE  | grep -v ": lo " | sed 's/ \+/\t/g' | cut -f 4 | cut -d\/ -f1
+#/bin/bash
+IP=`ifconfig | grep 'inet addr' | awk '{ print $2; }' | awk -F: '{ print $2; }' | grep -v 127.0.0.1`
+echo $IP
