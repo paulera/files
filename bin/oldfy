@@ -1,0 +1,21 @@
+#!/bin/bash
+
+if [ -z $1 ]; then
+	echo "Usage: oldfy <filename or directory>"
+	echo "Create a copy of the file or directory with extension .old"
+	exit 1
+fi
+
+if [ ! -f $1 ] && [ ! -d $1 ]; then
+	echo $1 not found
+	exit 1
+fi
+
+if [ -f $1 ]; then
+	cp $1 $1.old
+fi
+
+if [ -d $1 ]; then
+	cp -r $1 $1.old
+fi
+
