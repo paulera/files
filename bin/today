@@ -1,4 +1,9 @@
 #!/bin/bash
-#desc:Retorna a data atual, no formato YYYY-MM-DD
-date +"%Y-%m-%d"
+#desc: Returns current data as YYYY-MM-DD, or
+#      YYYYMMDD if "stamp" param provided
 
+if [ "$1" == "stamp" ]; then
+        date +"%Y-%m-%d" | sed s/-//g
+else
+        date +"%Y-%m-%d"
+fi
