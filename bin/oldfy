@@ -1,0 +1,20 @@
+#!/bin/bash
+
+if [ -z $1 ] || [ "$1" == "--help" ]; then
+	echo "Usage: oldfy <filename>"
+	echo "Creates a .old copy of the file."
+	echo
+	exit 1;
+fi
+
+if [ ! -f $1 ]; then
+	echo $1 is not a valid file!
+	exit 1;
+fi
+
+if [ -f $1.old ]; then
+	echo $1.old already exists!
+	exit 1;
+fi
+
+cp $1 $1.old
