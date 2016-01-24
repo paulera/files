@@ -1,4 +1,10 @@
 #!/bin/bash
-#desc:Retorna o horario atual no formato HH:MM:SS
-date +"%T"
+#desc: Current time as HH:MM:SS,
+#      or HHMMSS if "stamp" param provided
+
+if [ "$1" == "stamp" ]; then
+	date +"%T" | sed s/://g
+else
+	date +"%T"
+fi
 
