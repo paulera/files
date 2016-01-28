@@ -1,0 +1,43 @@
+#!/bin/bash
+
+PUBKEY=~/.ssh/id_rsa.pub
+
+if [ "$1" == "--help" ]; then
+	echo "Usage: sshsendkey <user>@<server> [-p port]"
+	echo "       sshsendkey <ssh connection params>"
+	echo
+	echo "Connects to the remote server and copy your"
+	echo "public RSA key to the ~/.ssh/authorized_keys"
+	echo "file"
+	exit 1;
+fi
+
+if [ -z $1 ]; then
+	echo "Invalid parameter"
+	echo "run sshsendkey --help for info"
+	exit 1;
+fi
+
+if [ ! -f $PUBKEY ]; then
+	cecho white "$PUBKEY"
+	cecho reset " not found!\n\n"
+	cecho yellow "You must generate your RSA public key!\n\n";
+	cecho reset;
+	ssh-keygen -t rsa;
+fi
+
+if [ ! -f $PUBKEY ]; then
+	cecho red "$PUBKEY not found!\n";
+	exit 1;
+fi
+
+cecho reset "Add your public key "
+cecho white $PUBKEY
+cecho reset " to the server? [y/"
+cecho white "N"
+cecho reset "] "
+read -p "" -r
+echo
+if [[ $REPLY =~ ^[Y\|y]$ ]]; then
+	cat $PUBKEY | ssh $* "mkdir -p ~/.ssh && cat >>  ~/.ssh/authorized_keys"
+fi
