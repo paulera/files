@@ -1,6 +1,5 @@
 #!/bin/bash
 
-<<<<<<< HEAD
 if [ -z $1 ] || [ "$1" == "--help" ]; then
 	echo "Usage: oldfy <filename>"
 	echo "Creates a .old copy of the file."
@@ -18,25 +17,16 @@ if [ -f $1.old ]; then
 	exit 1;
 fi
 
-cp $1 $1.old
-=======
-if [ -z $1 ]; then
-	echo "Usage: oldfy <filename or directory>"
-	echo "Create a copy of the file or directory with extension .old"
-	exit 1
-fi
-
-if [ ! -f $1 ] && [ ! -d $1 ]; then
-	echo $1 not found
-	exit 1
-fi
-
 if [ -f $1 ]; then
 	cp $1 $1.old
+	exit 0;
 fi
 
 if [ -d $1 ]; then
 	cp -r $1 $1.old
+	exit 0;
 fi
 
->>>>>>> 8e8734fcc98d8d70534ff4b22a74c3935e9a7a49
+echo Failed
+exit 1;
+
