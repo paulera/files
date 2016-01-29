@@ -1,82 +1,103 @@
-" All system-wide defaults are set in $VIMRUNTIME/debian.vim (usually just
-" /usr/share/vim/vimcurrent/debian.vim) and sourced by the call to :runtime
-" you can find below.  If you wish to change any of those settings, you should
-" do it in this file (/etc/vim/vimrc), since debian.vim will be overwritten
-" everytime an upgrade of the vim packages is performed.  It is recommended to
-" make changes after sourcing debian.vim since it alters the value of the
-" 'compatible' option.
+set nocompatible   " Disable vi-compatibility
+set t_Co=256
 
-" This line should not be removed as it ensures that various options are
-" properly set to work with the Vim-related packages available in Debian.
-runtime! debian.vim
+colorscheme xoria256
+set guifont=menlo\ for\ powerline:h16
+set guioptions-=T " Removes top toolbar
+set guioptions-=r " Removes right hand scroll bar
+set go-=L " Removes left hand scroll bar
+set linespace=15
 
-" Uncomment the next line to make Vim more Vi-compatible
-" NOTE: debian.vim sets 'nocompatible'.  Setting 'compatible' changes numerous
-" options, so any other options should be set AFTER setting 'compatible'.
-set nocompatible
+set showmode                    " always show what mode we're currently editing in
+set nowrap                      " don't wrap lines
+set tabstop=4                   " a tab is four spaces
+set smarttab
+set tags=tags
+set softtabstop=4               " when hitting <BS>, pretend like a tab is removed, even if spaces
+set expandtab                   " expand tabs by default (overloadable per file type later)
+set shiftwidth=4                " number of spaces to use for autoindenting
+set shiftround                  " use multiple of shiftwidth when indenting with '<' and '>'
+set backspace=indent,eol,start  " allow backspacing over everything in insert mode
+set autoindent                  " always set autoindenting on
+set copyindent                  " copy the previous indentation on autoindenting
+set number                      " always show line numbers
+set ignorecase                  " ignore case when searching
+set smartcase                   " ignore case if search pattern is all lowercase,
+set timeout timeoutlen=200 ttimeoutlen=100
+set visualbell           " don't beep
+set noerrorbells         " don't beep
+set autowrite  "Save on buffer switch
+set mouse=a
+ 
+" With a map leader it's possible to do extra key combinations
+" like <leader>w saves the current file
+let mapleader = ","
+let g:mapleader = ","
 
-" Vim5 and later versions support syntax highlighting. Uncommenting the next
-" line enables syntax highlighting by default.
-if has("syntax")
-  syntax on
-endif
+" Fast saves
+nmap <leader>w :w!<cr>
 
-" If using a dark background within the editing area and syntax highlighting
-" turn on this option as well
-set background=dark
+" Down is really the next line
+nnoremap j gj
+nnoremap k gk
 
-" Uncomment the following to have Vim jump to the last position when
-" reopening a file
-"if has("autocmd")
-"  au BufReadPost * if line("'\"") > 1 && line("'\"") <= line("$") | exe "normal! g'\"" | endif
-"endif
+"Easy escaping to normal model
+imap jj <esc>
 
-" Uncomment the following to have Vim load indentation rules and plugins
-" according to the detected filetype.
-if has("autocmd")
-  filetype plugin indent on
-endif
+"Auto change directory to match current file ,cd
+nnoremap ,cd :cd %:p:h<CR>:pwd<CR>
 
-" The following are commented out as they cause vim to behave a lot
-" differently from regular Vi. They are highly recommended though.
-set showcmd			" Show (partial) command in status line.
-set showmatch		" Show matching brackets.
-set ignorecase		" Do case insensitive matching
-set smartcase		" Do smart case matching
-set incsearch		" Incremental search
-set hidden			" Hide buffers when they are abandoned
+"easier window navigation
 
-" TAB AND INDENT
-set tabstop=4		" Size of a hard tabstop
-set shiftwidth=4	" size of an indent
-" a combination of spaces and tabs are used to simulate tab stops at a width
-" other than the (hard)tabstop
-set softtabstop=4
+nmap <C-h> <C-w>h
+nmap <C-j> <C-w>j
+nmap <C-k> <C-w>k
+nmap <C-l> <C-w>l
 
-" BACKSPACE FIX
-set backspace=indent,eol,start
+"Resize vsplit
+nmap <C-v> :vertical resize +5<cr>
+nmap 25 :vertical resize 40<cr>
+nmap 50 <c-w>=
+nmap 75 :vertical resize 120<cr>
 
-set nowrap			" don't wrap lines
-set number			" show numbers
+" splits start
+set splitbelow
+set splitright
 
-" Fix arrows keys - might be needed in some environments
-" In insert mode, press <Ctrl+V>+key to generate the ^[XX value
-"imap ^[OC <ESC>li
-"imap ^[OA <ESC>kli
-"imap ^[OB <ESC>jli
-"imap ^[OD <ESC>hi
+nmap <C-b> :NERDTreeToggle<cr>
 
-" --------------------------- THEME -------------------------------- "
+"Load the current buffer in Chrome
+"nmap ,c :!open -a Google\ Chrome<cr>
 
-set t_Co=256 " enable 256 colors terminal
+"Show (partial) command in the status line
+set showcmd
 
-" keywords
-highlight Statement  ctermfg=14   cterm=NONE
-highlight Special    ctermfg=10   cterm=BOLD
+" Create split below
+nmap :sp :rightbelow sp<cr>
 
+" Quickly go forward or backward to buffer
+" nmap :bp :BufSurfBack<cr>
+" nmap :bn :BufSurfForward<cr>
 
-highlight LineNr     ctermfg=DarkGrey
-highlight Normal     ctermfg=LightGrey	ctermbg=Black
-highlight Visual										cterm=reverse
-highlight Comment    ctermfg=DarkGray
-highlight NonText    ctermfg=DarkBlue					cterm=NONE
+highlight Search cterm=reverse
+
+" Swap files out of the project root
+set backupdir=~/.vim/backup/
+set directory=~/.vim/swap/
+
+" Run PHPUnit tests
+" map <Leader>t :!phpunit %<cr>
+
+" Easy motion stuff
+" let g:EasyMotion_leader_key = '<Leader>'
+
+" Powerline (Fancy thingy at bottom stuff)
+" let g:Powerline_symbols = 'fancy'
+" set laststatus=2   " Always show the statusline
+" set encoding=utf-8 " Necessary to show Unicode glyphs
+" set noshowmode " Hide the default mode text (e.g. -- INSERT -- below the statusline)
+
+autocmd cursorhold * set nohlsearch
+
+syntax on
+
