@@ -28,7 +28,10 @@ set visualbell           " don't beep
 set noerrorbells         " don't beep
 set autowrite  "Save on buffer switch
 set mouse=a
- 
+set hlsearch   "Highlight search results 
+set ruler      "Show current position in document
+set title      " change terminal title to the current file
+
 " With a map leader it's possible to do extra key combinations
 " like <leader>w saves the current file
 let mapleader = ","
@@ -79,11 +82,12 @@ nmap :sp :rightbelow sp<cr>
 " nmap :bp :BufSurfBack<cr>
 " nmap :bn :BufSurfForward<cr>
 
-highlight Search cterm=reverse
+"highlight Search cterm=reverse
 
 " Swap files out of the project root
-set backupdir=~/.vim/backup/
-set directory=~/.vim/swap/
+set undodir=~/.vim/undo//
+set backupdir=~/.vim/backup//
+set directory=~/.vim/swap//
 
 " Run PHPUnit tests
 " map <Leader>t :!phpunit %<cr>
@@ -92,12 +96,13 @@ set directory=~/.vim/swap/
 " let g:EasyMotion_leader_key = '<Leader>'
 
 " Powerline (Fancy thingy at bottom stuff)
-" let g:Powerline_symbols = 'fancy'
-" set laststatus=2   " Always show the statusline
-" set encoding=utf-8 " Necessary to show Unicode glyphs
-" set noshowmode " Hide the default mode text (e.g. -- INSERT -- below the statusline)
-
-autocmd cursorhold * set nohlsearch
+let g:Powerline_symbols = 'fancy'
+set laststatus=2   " Always show the statusline
+set encoding=utf-8 " Necessary to show Unicode glyphs
+"set noshowmode " Hide the default mode text (e.g. -- INSERT -- below the statusline)
 
 syntax on
+
+" leader-space to clear search
+noremap <leader><space> :noh<cr>:call clearmatches()<cr>
 
