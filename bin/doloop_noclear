@@ -1,0 +1,11 @@
+#!/bin/bash
+
+INTERVAL="1"
+
+while :; do
+	cecho dgray "[$(now)]\n"
+	cecho reset
+	$*
+	echo
+	sleep $INTERVAL
+done
