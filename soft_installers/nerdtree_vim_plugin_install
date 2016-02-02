@@ -1,0 +1,34 @@
+cd ~
+
+if [ ! -d .vim ]; then
+	mkdir .vim
+	if [ ! -d .vim ]; then
+		echo "Can't create ~/.vim";
+		exit 1;
+	fi
+fi
+
+if [ -d ~/.vim/tmpnerdtree ]; then
+    echo "~/.vim/tmpnerdtree altready exists";
+    echo "Remove the folder and try again";
+    exit 1;
+fi
+
+git clone https://github.com/scrooloose/nerdtree.git ~/.vim/tmpnerdtree
+
+if [ ! -d ~/.vim/tmpnerdtree ]; then
+	echo "Can't create ~/.vim/tmpnerdtree to download the files";
+	exit 1;
+fi
+
+cp -i -r tmpnerdtree/* . && rm -r ~/.vim/tmpnerdtree
+
+
+
+echo "Add the following line to your vimrc file to"
+echo "set a shortcut for NERDTree plugin"
+echo
+echo "nmap <C-b> :NERDTreeToggle<cr>"
+echo
+
+
