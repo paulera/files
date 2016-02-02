@@ -1,3 +1,5 @@
+#!/bin/bash
+
 cd ~
 
 if [ ! -d .vim ]; then
@@ -8,22 +10,26 @@ if [ ! -d .vim ]; then
 	fi
 fi
 
-if [ -d ~/.vim/tmpnerdtree ]; then
-    echo "~/.vim/tmpnerdtree altready exists";
-    echo "Remove the folder and try again";
+cd ~/.vim
+
+if [ -f tmpnerdtree.zip ]; then
+    echo "~/.vim/tmpnerdtree.zip altready exists";
+    echo "Remove the file and try again";
     exit 1;
 fi
 
-git clone https://github.com/scrooloose/nerdtree.git ~/.vim/tmpnerdtree
+wget -O tmpnerdtree.zip https://github.com/scrooloose/nerdtree/archive/master.zip
 
-if [ ! -d ~/.vim/tmpnerdtree ]; then
-	echo "Can't create ~/.vim/tmpnerdtree to download the files";
+if [ ! -f tmpnerdtree.zip ]; then
+	echo "Failed to download. Aborting.";
 	exit 1;
 fi
 
-cp -i -r tmpnerdtree/* . && rm -r ~/.vim/tmpnerdtree
+unzip tmpnerdtree.zip && rm tmpnerdtree.zip && echo "tmpnerdtree unzipped and deleted"
 
+cp -r -i nerdtree-master/* . && rm nerdtree-master
 
+echo
 
 echo "Add the following line to your vimrc file to"
 echo "set a shortcut for NERDTree plugin"
