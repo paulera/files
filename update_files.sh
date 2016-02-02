@@ -9,24 +9,29 @@ if [ "$(git status -s)" != "" ]; then
 	echo
 	echo
 	git status
-	echo
-	echo "Do you want to proceed and overwrite changed files?"
-	echo "(don't worry about untracked files, they will be fine)"
-
-    read RESULT
-    if [ "$RESULT" != "yes" ] &&
-        [ "$RESULT" != "YES" ] &&
-        [ "$RESULT" != "y" ] &&
-        [ "$RESULT" != "Y" ]; then
-        exit 1
-    fi
-
-	echo
-	echo
-	cecho white "git reset --hard HEAD\n"
-	git reset --hard HEAD
-	cecho white "git pull\n"
-	git pull
-	echo
 
 fi
+    
+echo
+echo "Do you want to proceed and overwrite your current copy?"
+echo "Worth to make a backup, maybe?"
+echo "(Untracked files won't be deleted)"
+
+read RESULT
+if [ "$RESULT" != "yes" ] &&
+    [ "$RESULT" != "YES" ] &&
+    [ "$RESULT" != "y" ] &&
+    [ "$RESULT" != "Y" ]; then
+    exit 1
+fi
+
+cd "$(dirname "$0")"
+
+echo
+cecho cyan "git reset --hard HEAD\n"
+git reset --hard HEAD
+echo
+cecho cyan "git pull\n"
+git pull
+echo
+
