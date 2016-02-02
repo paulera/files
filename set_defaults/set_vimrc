@@ -1,20 +1,80 @@
 #!/bin/bash
 
-VIMRC_DEST=~/.vim
+VIMFOLDER=~/.vim
 
-if [ -f "$VIMRC_DEST/vimrc" ] || [ -h "$VIMRC_DEST/vimrc" ]; then
-	echo "Manually remove $VIMRC_DEST/vimrc and try running this script again";
-	exit 1;
+# Try to create a folder and return 0/1
+ensuredir () {
+    if [ ! -d $1 ]; then
+        mkdir -p $1;
+        cecho green "OK:"
+        echo " create dir $1"
+    else
+        cecho green "OK:"
+        echo " dir $1 already exists. Skipped."
+    fi
+    if [ ! -d $1 ]; then
+        cecho red "ERROR:" 
+        echo " Can´t create $1";
+        echo
+        return 0;
+    fi
+    echo
+    return 1;
+}
+
+echo
+
+
+if [ "$(readlink ~/.vimrc)" == "$FILESROOT/vimrc" ]; then
+    cecho green "OK:"
+    echo " ~/.vimrc -> $FILESROOT/vimrc"
 else
-	if [ ! -d "$VIMRC_DEST" ]; then
-		mkdir "$VIMRC_DEST";
-	fi
-
-	if [ ! -d "$VIMRC_DEST" ]; then
-		echo "Failed to create the folder $VIMRC_DEST";
-	fi
-
-	echo "Creating link $VIMRC_DEST/vimrc -> $FILESROOT/vimrc";
-	ln -s "$FILESROOT/vimrc" "$VIMRC_DEST/vimrc";
+    if [ -f ~/.vimrc ]; then
+        cecho yellow "WARNING:"
+        echo " ~/.vimrc already exists.";
+        echo "you can link later using the command"
+        cecho white "ln -s \$FILESROOT/xoria256.vim ~/.vim/colors/xoria256.vim\n"
+        echo "or running this script again"
+    else
+        echo "Linking $FILESROOT/vimrc";
+        ln -s $FILESROOT/vimrc ~/.vimrc;
+        if [ -f ~/.vimrc ]; then
+            cecho green "OK:"
+            echo " ~/.vimrc -> $FILESROOT/vimrc"
+        else
+            cecho red "ERROR:"
+            echo "Could not create the link ~/.vimrc -> $FILESROOT/vimrc"
+        fi
+    fi
 fi
+echo
+
+ensuredir ~/.vim/colors
+if [ "$(readlink ~/.vim/colors/xoria256.vim)" == "$FILESROOT/xoria256.vim" ]; then
+    cecho green "OK:"
+    echo " ~/.vim/colors/xoria256.vim -> $FILESROOT/xoria256.vim"
+else
+    if [ -f ~/.vim/colors/xoria256.vim ]; then
+        cecho yellow "WARNING:"
+        echo " xoria256 color scheme already installed."
+        echo "you can link later using the command"
+        cecho white "ln -s \$FILESROOT/xoria256.vim ~/.vim/colors/xoria256.vim\n"
+        echo "or running this script again"
+    else
+        echo "Linking $FILESROOT/xoria256.vim";
+        ln -s $FILESROOT/xoria256.vim ~/.vim/colors/xoria256.vim
+        if [ -f ~/.vim/colors/xoria256.vim ]; then
+            cecho green "OK:"
+            echo " ~/.vim/colors/xoria256.vim -> $FILESROOT/xoria256.vim"
+        else
+            cecho red "ERROR:"
+            echo "Could not create the link ~/.vimrc -> $FILESROOT/vimrc"
+        fi
+    fi
+fi
+echo
+
+ensuredir ~/.vim/undo;
+ensuredir ~/.vim/backup;
+ensuredir ~/.vim/swap;
 
