@@ -5,18 +5,38 @@ if [ -z $1 ]; then
     exit 1;
 fi
 
-BINFOLDER=$HOME"/bin"
+if [ "$1" == "2" ]; then
 
-if [ ! -d $BINFOLDER ]; then
-	mkdir -p $BINFOLDER
+    BINFOLDER=$FILESROOT"/bin"
+
+    if [ ! -d $BINFOLDER ]; then
+        mkdir -p $BINFOLDER
+    fi
+
+    if [ ! -d $BINFOLDER ]; then
+        echo "Unable to create $BINFOLDER"
+        exit 1;
+    fi
+    
+    ARQ=$BINFOLDER"/"$2
+
+else
+
+    BINFOLDER=$HOME"/bin"
+
+    if [ ! -d $BINFOLDER ]; then
+        mkdir -p $BINFOLDER
+    fi
+
+    if [ ! -d $BINFOLDER ]; then
+        echo "Unable to create $BINFOLDER"
+        exit 1;
+    fi
+    
+    ARQ=$BINFOLDER"/"$1
+
 fi
 
-if [ ! -d $BINFOLDER ]; then
-	echo "Unable to create $BINFOLDER"
-	exit 1;
-fi
-
-ARQ=$BINFOLDER"/"$1
 
 if [ ! -f $ARQ ]; then
 	vim -c ":read $FILESROOT/script_template" +3 $ARQ
