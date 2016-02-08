@@ -1,0 +1,8 @@
+#!/bin/bash
+
+INTERVAL="1"
+
+while :; do
+	$*
+	sleep $INTERVAL
+done
