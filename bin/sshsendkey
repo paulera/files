@@ -33,7 +33,9 @@ fi
 
 cecho reset "Add your public key "
 cecho white $PUBKEY
-cecho reset " to the server? [y/"
+cecho reset " to the server's "
+cecho white "~/.ssh/authorized_keys"
+cecho reset " file? [y/"
 cecho white "N"
 cecho reset "] "
 read -p "" -r
