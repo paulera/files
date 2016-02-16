@@ -1,0 +1,13 @@
+#!/bin/bash
+
+for i in $(ls $FILESROOT/soft/sqlmap/tamper/*.py | grep -v init); do
+    FILENAME=$(basename $i);
+    TAMPER=${FILENAME%.*} 
+    echo
+    cecho blue ">>>>>> Using tamper "
+    cecho yellow $TAMPER
+    echo
+    echo sqlmap --tamper=$TAMPER $*
+    echo
+    sqlmap --tamper=$TAMPER $*
+done
