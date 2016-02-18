@@ -1,0 +1,2 @@
+#!/bin/bash
+cat /etc/group | sed 's/^\([^:]\+\):x:[0-9]\+:/\1=/g' | sed 's/:/,/g' | grep -v '=$'
