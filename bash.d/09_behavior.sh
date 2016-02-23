@@ -1,2 +1,6 @@
 # autocompletion of files and directories case INsensitive
-bind "set completion-ignore-case on"
+case "$TERM" in
+xterm*|rxvt*)
+	bind "set completion-ignore-case on"
+    ;;
+esac
