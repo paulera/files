@@ -1,0 +1,10 @@
+#!/bin/bash
+
+if [ -z $1 ] || [ "$1" == "--help" ]; then
+    echo "Usage: cyg <command to run>"
+    echo "Starts mintty running the provided command and set window title."
+    echo
+    exit 1
+fi
+
+mintty -t "$*" -e $* &
