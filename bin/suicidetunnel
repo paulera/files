@@ -2,7 +2,7 @@
 
 # this script is used to open a tunnel which closes itself after a timeout
 
-TIMEOUT=5 # timeout in seconds
+TIMEOUT=3600 # timeout in seconds
 
 MESSAGE_CMD="echo -ne \"Suicide tunnel (x_x)\\n\\n$*\\n\" | sed \"s/\\([-]\\+\\)/\\n\\1/g\""
 TITLE_CMD="echo -ne \"\\e]0;[\$secs] $*\\a\"";
