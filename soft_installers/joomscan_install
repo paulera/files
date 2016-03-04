@@ -1,0 +1,67 @@
+#!/bin/bash
+
+echo "This installer is not finished"
+exit
+
+# CONFIGURATION ######################
+
+APPNAME="joomscan"
+
+######################################
+
+. installer_base.sh
+installer_bootstrap
+
+cd $APPFOLDER
+wget http://freefr.dl.sourceforge.net/project/joomscan/joomscan/2012-03-10/joomscan-latest.zip
+unzip joomscan-latest.zip
+chmod u+x joomscan.pl
+link_bin "$APPFOLDER/joomscan.pl" "joomscan"
+echo
+echo
+echo "+---------------------------+"
+echo "| installing perl libraries |"
+echo "+---------------------------+"
+echo
+echo
+
+
+#TODO: consider doing everything with cpanm. pinst "App:cpanminus" then use it for the other packages
+
+# function to call cpan to install perl libraries when not available
+pinst() { if [ "$(perldoc -l $1 2>/dev/null )" == "" ]; then echo "install $1" | perl -MCPAN -e shell; else echo "Perl package $1 already installed. [ ok ]"; fi; }
+pinst "local:lib"
+pinst "Switch"
+
+pinst "App:cpanminus"
+pinst "CPANPLUS"
+
+pinst "Net::SSLeay"
+pinst "IO::Socket::SSL"
+pinst "inc:latest"
+pinst "HTML::TreeBuilder"
+
+#pinst "WWW::Mechanize" #<<-----
+#cpanm --installdeps Module::Build
+#cpanm --install -f Module::Build
+cpanm --installdeps WWW::Mechanize
+cpanm install -f Mechanize #<------ Workaround
+
+cpanm --reinstall -f Switch #<------ Workaround
+
+
+
+echo
+echo "+----------------+"
+echo "| Troubleshoting |"
+echo "+----------------+"
+echo
+echo
+echo "Ensure your PERL is up-to-date"
+echo "missing crypto.h: install package libcrypt-devel"
+echo "missing openssl/err.h: install package libssl-dev or openssl-dev"
+echo "Other stuff might be missing: gnupg"
+echo "After fixing missing packages run the install again"
+echo "and run this script again".
+echo
+
