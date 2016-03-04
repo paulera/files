@@ -6,8 +6,9 @@ TIMEOUT=3600 # timeout in seconds
 
 MESSAGE_CMD="echo -ne \"Suicide tunnel (x_x)\\n\\n$*\\n\" | sed \"s/\\([-]\\+\\)/\\n\\1/g\""
 TITLE_CMD="echo -ne \"\\e]0;[\$secs] $*\\a\"";
-COUNTER_CMD="secs=\$(($TIMEOUT)); while [[ \$secs -gt 0 ]]; do echo -ne \"This tunnel will auto-shutdown in: \$secs                             \\r\"; $TITLE_CMD; sleep 1; : \$((secs--)); done";
-TUNNEL_DEAD_CMD="echo -ne \"Tunnel closed!                                              \""
+COUNTER_CMD="secs=\$(($TIMEOUT)); while [[ \$secs -gt 0 ]]; do echo -ne \"This tunnel will auto-shutdown in: \$secs      \\r\"; $TITLE_CMD; sleep 1; : \$((secs--)); done";
+
+TUNNEL_DEAD_CMD="echo -ne \"Tunnel closed!                           \""
 TITLE_DEAD_CMD="echo -ne \"\\e]0;(x_x) $*\\a\"";
 
 # add a clear command you you like
