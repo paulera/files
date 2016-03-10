@@ -15,11 +15,14 @@ cd /opt
 sudo git clone https://github.com/paulera/files
 sudo cp /etc/bash.bashrc /etc/bash.bashrc.old
 
-# You must add the run_bash call in each user's .bashrc file
+# Add the run_bash call in each EXISTING user's .bashrc file
 echo "if [ -f /opt/files/bash.d/run_bash ]; then . /opt/files/bash.d/run_bash; fi" >> /home/user/.bashrc
 
-# Do this to enable to the root user
+# Enable to the root user
 echo "if [ -f /opt/files/bash.d/run_bash ]; then . /opt/files/bash.d/run_bash; fi" >> /root/.bashrc
+
+# Make it already available for NEW users
+echo "if [ -f /opt/files/bash.d/run_bash ]; then . /opt/files/bash.d/run_bash; fi" >> /etc/skel/.bashrc
 ```
 Note that these commands will:
 - create a folder *files*
