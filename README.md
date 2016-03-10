@@ -1,7 +1,7 @@
 This is a bundle of scripts that I usually install in every linux machine I need to work. It makes a few personal tweaks in environment configuration, described below. Useful also when using third servers (as website hostings), where I use to have control only over my home folder.
 # Install #
 
-#### Inside home folder (no root privilege needed) ####
+#### For a single account (no root privilege needed) ####
 ``` bash
 cd ~
 git clone https://github.com/paulera/files
@@ -13,15 +13,17 @@ echo "if [ -f ~/files/bash.d/run_bash ]; then . ~/files/bash.d/run_bash; fi" >> 
 ``` bash
 cd /opt
 sudo git clone https://github.com/paulera/files
-sudo cp /etc/bash.bashrc /etc/bash.bashrc.old
 
-# Add the run_bash call in each EXISTING user's .bashrc file
-echo "if [ -f /opt/files/bash.d/run_bash ]; then . /opt/files/bash.d/run_bash; fi" >> /home/user/.bashrc
+# This command adds the run_bash call in each EXISTING user's .bashrc file. Change "USER" for the username
+cp /home/USER/.bashrc /home/user/.bashrc.old # backup
+echo "if [ -f /opt/files/bash.d/run_bash ]; then . /opt/files/bash.d/run_bash; fi" >> /home/USER/.bashrc
 
-# Enable to the root user
+# This command adds the run_bash call to root's .bashrc file
+sudo cp /root/.bashrc /root/.bashrc.old # backup
 echo "if [ -f /opt/files/bash.d/run_bash ]; then . /opt/files/bash.d/run_bash; fi" >> /root/.bashrc
 
-# Make it already available for NEW users
+# This command makes the run_bash call available for NEW users
+sudo cp /etc/skel/.bashrc /etc/skel/.bashrc.old # backup
 echo "if [ -f /opt/files/bash.d/run_bash ]; then . /opt/files/bash.d/run_bash; fi" >> /etc/skel/.bashrc
 ```
 Note that these commands will:
