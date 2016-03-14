@@ -1,2 +1,2 @@
 #!/bin/bash
-echo "https://www.google.com/maps/@$(curl -s ipinfo.io/loc),13z"
+echo "https://www.google.ie/maps/place//@"$(curl -s ipinfo.io/loc)
