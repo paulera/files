@@ -1,0 +1,8 @@
+#!/bin/bash
+
+COUNT=$1;
+if [ -z $1 ]; then
+    COUNT=5;
+fi
+
+find . -type f -printf '%T@ %TY-%Tm-%Td %TH:%TM:%.2TS %p\n' | sort -nr | head -n $COUNT | cut -f2- -d" "
