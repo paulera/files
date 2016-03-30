@@ -1,0 +1,2 @@
+#!/bin/bash
+echo -n $(getent hosts $1 | awk '{ print $1; }')
