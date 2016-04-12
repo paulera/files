@@ -1,0 +1,21 @@
+#!/bin/bash
+
+#!/bin/bash
+
+IPS=$(nmap -sP $1 | grep report | cut -d\  -f 5)
+
+IPCOUNT=$(wc -w <<< $IPS)
+
+echo "::: $IPCOUNT IPS FOUND FOR $1";
+echo;
+
+echo $IPS | tr ' ' "\n";
+
+echo;
+
+for i in $IPS; do
+        echo "===== $i =====";
+        nmap $i | grep -v "Starting Nmap" | grep -v "Nmap scan report";
+        echo;
+done;
+
