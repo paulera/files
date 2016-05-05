@@ -1,7 +1,5 @@
 #!/bin/bash
 
-#!/bin/bash
-
 IPS=$(nmap -sP $1 | grep report | cut -d\  -f 5)
 
 IPCOUNT=$(wc -w <<< $IPS)
