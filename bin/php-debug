@@ -1,0 +1,35 @@
+#!/bin/bash
+
+TERMINAL=$(uname -o)
+
+if [ "$TERMINAL" == "Cygwin" ]; then
+	PHP_INI_BASE=`cygpath $(php --ini | grep php.ini$ | cut -d:  -f2-)`
+else
+	PHP_INI_BASE=$(php --ini | grep phsp.ini$ | cut -d\  -f2-)
+fi
+
+if [ ! -f $PHP_INI_BASE ]; then
+	echo "php.ini not found. Aborted.";
+	exit 1;
+fi
+
+PHP_XDEBUG_ON=$PHP_INI_BASE.xdebug-on
+PHP_XDEBUG_OFF=$PHP_INI_BASE.xdebug-off
+
+if [ "$1" == "on" ] || [ "$1" == "1" ] || [ "$1" == "enable" ]; then
+	
+	if [ ! -f $PHP_XDEBUG_ON ]; then
+		echo "$PHP_XDEBUG_ON not found. Aborted."
+		exit 1;
+	fi
+	cp $PHP_XDEBUG_ON $PHP_INI_BASE
+
+elif [ "$1" == "off" ] || [ "$1" == "0" ] || [ "$1" == "disable" ]; then
+	
+	if [ ! -f $PHP_XDEBUG_OFF ]; then
+		echo "$PHP_XDEBUG_OFF not found. Aborted."
+		exit 1;
+	fi
+	cp $PHP_XDEBUG_OFF $PHP_INI_BASE
+
+fi
