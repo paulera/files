@@ -1,0 +1,79 @@
+#!/bin/bash
+
+WOW=10
+GOOD=50
+AVER=150
+
+bar() {
+    head -c $(( $1 / 2 )) /dev/zero | tr '\0' '|'
+}
+
+
+if [ -z $1 ]; then
+    TARGET="www.google.com"
+else
+    TARGET=$1
+fi
+
+echo Pinging $TARGET. Ctrl+C to quit.
+echo
+
+while true; do
+    RESULT=$(ping $TARGET -n 1)
+    cecho reset "\r$(now) "
+    if [[ $RESULT =~ ^.*could\ not\ find\ host.*$ ]]; then
+        cecho red "CAN'T FIND HOST"
+        cecho reset " (x_x)\n"
+        sleep 5
+    elif [[ $RESULT =~ .*Reply\ from.* ]]; then
+        IP=$(echo "$RESULT" | grep "Reply from" | cut -d\  -f3 | sed "s/://")
+        LONGTIME=$(echo "$RESULT" | grep "Reply from" | cut -d\  -f5)
+        SHORTTIME=$(echo "$RESULT" | grep "Reply from" | cut -d\  -f 5 | sed "s/time=\([0-9]\+\)ms/\1/g")
+
+        cecho white "[$IP] "
+
+        if [ "$LONGTIME" == "time<1ms" ]; then
+            SHORTTIME=0;
+        fi
+
+        if [ $SHORTTIME -le $WOW ]; then
+            cecho cyan  "WOW!"
+        elif [ $SHORTTIME -le $GOOD ]; then
+            cecho green  "GOOD"
+        elif [ $SHORTTIME -le $AVER ]; then
+            cecho yellow "AVER"
+        else
+            cecho red    "SLOW"            
+        fi
+
+        echo -n " | "
+
+        printf "%4s ms" $SHORTTIME
+
+        echo -n " | "
+        
+        if [ $SHORTTIME -gt 0 ]; then
+            cecho cyan keep
+            [ $SHORTTIME -le $WOW ] && bar $SHORTTIME || bar $WOW
+        fi
+
+        if [ $SHORTTIME -gt $WOW ]; then
+            cecho green keep
+            [ $SHORTTIME -le $GOOD ] && bar $SHORTTIME || bar $GOOD
+        fi
+
+        if [ $SHORTTIME -gt $GOOD ]; then
+            cecho yellow keep
+            [ $SHORTTIME -le $AVER ] && bar $(( $SHORTTIME - $GOOD )) || bar $AVER
+        fi
+
+        if [ $SHORTTIME -gt $AVER ]; then
+            cecho red keep
+            bar $(( $SHORTTIME - $AVER ))
+        fi
+
+        cecho reset "\n"
+
+    fi
+done
+
