@@ -24,7 +24,6 @@ while true; do
     if [[ $RESULT =~ ^.*could\ not\ find\ host.*$ ]]; then
         cecho red "CAN'T FIND HOST"
         cecho reset " (x_x)\n"
-        sleep 5
     elif [[ $RESULT =~ .*Reply\ from.* ]]; then
         IP=$(echo "$RESULT" | grep "Reply from" | cut -d\  -f3 | sed "s/://")
         LONGTIME=$(echo "$RESULT" | grep "Reply from" | cut -d\  -f5)
@@ -73,6 +72,8 @@ while true; do
         fi
 
         cecho reset "\n"
+
+        sleep 0.5s
 
     fi
 done
