@@ -27,7 +27,7 @@ set timeout timeoutlen=200 ttimeoutlen=100
 set visualbell           " don't beep
 set noerrorbells         " don't beep
 set autowrite  "Save on buffer switch
-set mouse=a
+"set mouse=a
 set hlsearch   "Highlight search results 
 set ruler      "Show current position in document
 set title      " change terminal title to the current file
