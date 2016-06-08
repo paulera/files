@@ -8,9 +8,13 @@ bar() {
     head -c $(( $1 / 2 )) /dev/zero | tr '\0' '|'
 }
 
+function title() {
+    echo -ne "\e]0;$1\a";
+}
+
 
 if [ -z $1 ]; then
-    TARGET="www.google.com"
+    TARGET="google.com"
 else
     TARGET=$1
 fi
@@ -22,6 +26,7 @@ while true; do
     RESULT=$(ping $TARGET -n 1)
     cecho reset "\r$(now) "
     if [[ $RESULT =~ ^.*could\ not\ find\ host.*$ ]]; then
+        title $TARGET" (x_x)"
         cecho red "CAN'T FIND HOST"
         cecho reset " (x_x)\n"
     elif [[ $RESULT =~ .*Reply\ from.* ]]; then
@@ -36,12 +41,16 @@ while true; do
         fi
 
         if [ $SHORTTIME -le $WOW ]; then
+            title $TARGET"=WOW"
             cecho cyan  "WOW!"
         elif [ $SHORTTIME -le $GOOD ]; then
+            title $TARGET"=GOOD"
             cecho green  "GOOD"
         elif [ $SHORTTIME -le $AVER ]; then
+            title $TARGET"=AVERAGE"
             cecho yellow "AVER"
         else
+            title $TARGET"=SLOW"
             cecho red    "SLOW"            
         fi
 
