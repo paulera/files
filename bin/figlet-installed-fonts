@@ -1,0 +1,9 @@
+#!/bin/bash
+
+if [ -z $1 ]; then
+	TXT="Sample text_12-3 #!@"
+else
+	TXT="$1"
+fi
+
+for i in $(figlet -I 2)/*.tlf; do F=$(basename $i); echo $F; figlet -f ${F%.*} "$TXT"; done
