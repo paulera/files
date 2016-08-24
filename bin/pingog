@@ -5,7 +5,7 @@ GOOD=50
 AVER=150
 
 bar() {
-    head -c $(( $1 / 2 )) /dev/zero | tr '\0' '|'
+    head -c $(( $1 / 3 )) /dev/zero | tr '\0' '|'
 }
 
 function title() {
@@ -29,6 +29,9 @@ while true; do
         title $TARGET" (x_x)"
         cecho red "CAN'T FIND HOST"
         cecho reset " (x_x)\n"
+    elif [[ $RESULT =~ ^.*Destination\ net\ unreachable.*$ ]]; then
+        cecho yellow "DESTINATION UNREACHABLE"
+        cecho reset " (O.o)\n"
     elif [[ $RESULT =~ .*Reply\ from.* ]]; then
         IP=$(echo "$RESULT" | grep "Reply from" | cut -d\  -f3 | sed "s/://")
         LONGTIME=$(echo "$RESULT" | grep "Reply from" | cut -d\  -f5)
