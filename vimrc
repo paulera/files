@@ -106,3 +106,6 @@ syntax on
 " leader-space to clear search
 noremap <leader><space> :noh<cr>:call clearmatches()<cr>
 
+" read .ino files as C 
+filetype on
+au BufNewFile,BufRead *.ino set filetype=c
