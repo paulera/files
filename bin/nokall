@@ -1,0 +1,41 @@
+#!/bin/bash
+HOST="127.0.0.1"
+MIN=1
+MAX=65535
+
+if [ ! -z $1 ]; then
+
+	if [ "$1" == "--help" ]; then
+		echo "Usage: nokall [host [minport [maxport]]]"
+		echo "knocks all ports with telnet and prints the banner"
+		echo "or whatever comes. If the connections drops just"
+		echo "don't print the port."
+		exit 1;
+	fi
+	HOST=$1
+fi
+
+if [ ! -z $2 ]; then
+	MIN=$2
+fi
+
+if [ ! -z $3 ]; then
+	MAX=$3
+fi
+
+cecho reset "Knocking "
+cecho cyan $HOST
+cecho reset " ports from "
+cecho cyan $MIN
+cecho reset " to "
+cecho cyan $MAX
+cecho reset " using telnet..."
+echo
+
+for (( PORT=$MIN; PORT<=$MAX; PORT++ )); do
+	RESULT=$(noknok $HOST $PORT)
+	if [[ $RESULT != *telnet:\ Unable\ to\ connect* ]]; then
+		echo "port "$PORT": "
+		echo $RESULT
+	fi
+done
