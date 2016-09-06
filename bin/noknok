@@ -1,0 +1,7 @@
+#!/usr/bin/expect
+# reference: http://elenako.com/2013/04/04/expect-script-start-telnet-run-commands-close-telnet/
+set timeout 1
+set ip [lindex $argv 0]
+set port [lindex $argv 1]
+spawn -noecho telnet $ip $port
+expect eof
