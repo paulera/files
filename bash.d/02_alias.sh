@@ -14,3 +14,6 @@ alias ff='grep --color=always -B2 -F2 -i -n -H -a'
 
 # color grep
 alias grepp='grep --color=auto -i -n'
+
+#rot13
+alias rot13="tr '[A-Za-z]' '[N-ZA-Mn-za-m]'"
