@@ -1,0 +1,20 @@
+#!/bin/bash
+
+if [ ! -d ./wp-content ] || [ ! -d ./wp-admin ]; then
+    echo "You must run this command from Wordpress root folder"
+    exit 1
+fi
+
+
+find . -type d -exec chmod 550 {} \;
+find . -type f -exec chmod 440 {} \;
+
+find ./wp-content/ -type d -exec chmod 555 {} \;
+find ./wp-content/ -type f -exec chmod 444 {} \;
+
+chmod 555 .
+chmod 555 ./wp-admin/
+
+find ./.git/ -type d -exec chmod 500 {} \;
+find ./.git/ -type f -exec chmod 400 {} \;
+
