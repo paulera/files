@@ -5,7 +5,7 @@ psaux() {
 		cecho yellow "psaux <grep params>"
 		cecho reset "\n\n     Run the command ps aux | grep "
 		cecho white "<grep params>\n\n"
-		exit 1;
+		return;
 	fi 
 
 	if [ -z $1 ]; then
