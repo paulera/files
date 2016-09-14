@@ -17,3 +17,6 @@ alias grepp='grep --color=auto -i -n'
 
 #rot13
 alias rot13="tr '[A-Za-z]' '[N-ZA-Mn-za-m]'"
+
+# replace gs (GhostScript) with git status function. Escape \gs to run the original command.
+alias gs="$FILESROOT/bin/gs"
