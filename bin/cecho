@@ -15,6 +15,11 @@
 #    cecho reset keep
 #       reseta a cor do terminal
 
+if [ "$FILES_ENV" == "mac" ]; then
+    ESC="\x1B"
+else
+    ESC="\e"
+fi
 
 case "$1" in
 	"black") COR="00;30" ;;
@@ -41,8 +46,8 @@ esac
 
 if [ "$2" == "keep" ]; then
 	TEXTO=$3
-	echo -n -e "\e["$COR"m$TEXTO"	
+	echo -n -e "$ESC["$COR"m$TEXTO"	
 else
 	TEXTO=$2
-	echo -n -e "\e["$COR"m$TEXTO\e[00m"
+	echo -n -e "$ESC["$COR"m$TEXTO$ESC[00m"
 fi
