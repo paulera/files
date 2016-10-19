@@ -1,3 +1,27 @@
+if [[ "$OSTYPE" =~ "darwin" ]]; then
+	export FILES_ENV="mac"
+elif [ "$OSTYPE" == "cygwin" ]; then
+	export FILES_ENV="cygwin"
+else
+	export FILES_ENV="linux"
+fi
+
+if [ "$FILES_ENV" == "mac" ]; then
+	if [ ! -d "/usr/local/opt/coreutils/libexec/gnubin/" ]; then
+		echo "For the FILES package to work on MacOS environments"
+		echo "you must install coreutils"
+		echo
+		echo "		brew install coreutils"
+		echo
+		echo "see: https://www.gnu.org/software/coreutils/coreutils.html"
+		echo
+		exit 1
+	else
+		export PATH=/usr/local/opt/coreutils/libexec/gnubin/:$PATH
+	fi
+fi
+
+
 export HOME=$(readlink -m ~)
 
 if [ ! -z $BASH_SOURCE ]; then

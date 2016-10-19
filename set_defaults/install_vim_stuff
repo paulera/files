@@ -1,6 +1,7 @@
 #!/bin/bash
 
 VIMFOLDER=~/.vim
+COLORSCHEME_FILE=jay.vim
 
 # Try to create a folder and return 0/1
 ensuredir () {
@@ -33,7 +34,7 @@ else
         cecho yellow "WARNING:"
         echo " ~/.vimrc already exists.";
         echo "you can link later using the command"
-        cecho white "ln -s \$FILESROOT/xoria256.vim ~/.vim/colors/xoria256.vim\n"
+        cecho white "ln -s \$FILESROOT/$COLORSCHEME_FILE ~/.vim/colors/$COLORSCHEME_FILE\n"
         echo "or running this script again"
     else
         echo "Linking $FILESROOT/vimrc";
@@ -50,22 +51,22 @@ fi
 echo
 
 ensuredir ~/.vim/colors
-if [ "$(readlink ~/.vim/colors/xoria256.vim)" == "$FILESROOT/xoria256.vim" ]; then
+if [ "$(readlink ~/.vim/colors/$COLORSCHEME_FILE)" == "$FILESROOT/$COLORSCHEME_FILE" ]; then
     cecho green "OK:"
-    echo " ~/.vim/colors/xoria256.vim -> $FILESROOT/xoria256.vim"
+    echo " ~/.vim/colors/$COLORSCHEME_FILE -> $FILESROOT/$COLORSCHEME_FILE"
 else
-    if [ -f ~/.vim/colors/xoria256.vim ]; then
+    if [ -f ~/.vim/colors/$COLORSCHEME_FILE ]; then
         cecho yellow "WARNING:"
-        echo " xoria256 color scheme already installed."
+        echo "$COLORSCHEME_FILE color scheme already installed."
         echo "you can link later using the command"
-        cecho white "ln -s \$FILESROOT/xoria256.vim ~/.vim/colors/xoria256.vim\n"
+        cecho white "ln -s \$FILESROOT/$COLORSCHEME_FILE ~/.vim/colors/$COLORSCHEME_FILE\n"
         echo "or running this script again"
     else
-        echo "Linking $FILESROOT/xoria256.vim";
-        ln -s $FILESROOT/xoria256.vim ~/.vim/colors/xoria256.vim
-        if [ -f ~/.vim/colors/xoria256.vim ]; then
+        echo "Linking $FILESROOT/$COLORSCHEME_FILE";
+        ln -s $FILESROOT/$COLORSCHEME_FILE ~/.vim/colors/$COLORSCHEME_FILE
+        if [ -f ~/.vim/colors/$COLORSCHEME_FILE ]; then
             cecho green "OK:"
-            echo " ~/.vim/colors/xoria256.vim -> $FILESROOT/xoria256.vim"
+            echo " ~/.vim/colors/$COLORSCHEME_FILE -> $FILESROOT/$COLORSCHEME_FILE"
         else
             cecho red "ERROR:"
             echo "Could not create the link ~/.vimrc -> $FILESROOT/vimrc"
