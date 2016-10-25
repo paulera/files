@@ -1,0 +1,34 @@
+#!/bin/bash
+
+
+if [ "$1" == "--help" ]; then
+    echo "Usage:"
+    echo "    phpini : php.ini file location"
+    echo "    phpini --vim : edit php.ini file with vim"
+    echo "    phpini --cat : returns php.ini contents"
+    echo "    phpini <terms> : grep from php.ini. Spaces are considered chars, not field delimiters"
+    echo
+    exit 1;
+fi
+
+INIFILE=$(php --ini | grep Loaded | sed 's/^.*File:[ ]\+//g')
+
+if [ ! -f "$INIFILE" ]; then
+    echo "Can't extract the php.ini path. Run"
+    echo
+    echo "    php --ini"
+    echo
+    echo "for trobleshooting".
+    echo
+    exit 1;
+fi
+
+if [ -z "$1" ]; then
+    echo $INIFILE;
+elif [ "$1" == "--vim" ]; then
+    vim $INIFILE;
+elif [ "$1" == "--cat" ]; then
+    cat $INIFILE;
+else
+    grep -- "${*:1}" $INIFILE
+fi
