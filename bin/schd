@@ -5,7 +5,7 @@
 
 if [ -z "$1" ] || [ "$1" == "--help" ]; then
     echo
-    echo "Usage: securityheaders <url>"
+    echo "Usage: schd <url>"
     echo
     echo "This script get the scan results from securityheaders.io (following redirections),"
     echo "tidy them up and display in a terminal-friendly form. Changes in that site"
