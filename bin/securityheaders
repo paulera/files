@@ -1,0 +1,39 @@
+#!/bin/bash
+# scurityheaders.io in terminal
+# github.com/paulera
+
+
+if [ -z "$1" ] || [ "$1" == "--help" ]; then
+    echo
+    echo "Usage: securityheaders <url>"
+    echo
+    echo "This script get the scan results from securityheaders.io (following redirections),"
+    echo "tidy them up and display in a terminal-friendly form. Changes in that site"
+    echo "HTML may impact and break the output in this script"
+    echo
+    exit 1
+fi
+
+
+SITE="$1"
+TEMP1=$(mktemp)
+TEMP2=$(mktemp)
+mv $TEMP2{,.html}
+TEMP2=$TEMP2.html
+
+curl -s "https://securityheaders.io/?q="$SITE"&hide=on&followRedirects=on" > $TEMP1
+
+cat $TEMP1 | \
+sed 's/container/fluid-container/g' | \
+sed "s/[ ]*\(class\|id\)=[\"'][-0-9a-z_ #]\+[ ]*[\"']//gI" | \
+sed 's/th>/td>/g' | \
+sed 's/<td>headers:<\/td>/<td><\/td>/gI' | \
+grep -v "<li><i></i>" \
+> $TEMP2
+
+echo -n "SCORE: "
+w3m -cols 5000 -dump $TEMP2 | tail --lines=+15 | head -n -5
+
+rm $TEMP1
+rm $TEMP2
+
