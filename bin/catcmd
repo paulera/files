@@ -1,0 +1,27 @@
+#!/bin/bash +x
+
+if [ -z $1 ] || [ "$1" == "--help" ]; then
+    echo "Usage: catcmd <command>";
+    echo "   show <command> code by looking it up with 'which' and 'cat'";
+    exit 1;
+fi;
+
+
+FILE=$(realpath $(which $1))
+
+if [ -z $FILE ]; then
+    echo "The command you are trying to catcmd doesn't exist.";
+    exit 1;
+fi
+
+BAR=$(sed "s/./-/g" <<< "$FILE")
+
+cecho dgray "# +-"$BAR"-+\n"
+cecho dgray "# | " 
+cecho yellow $FILE;
+cecho dgray " | \n" 
+cecho dgray "# +-"$BAR"-+\n"
+
+cecho white keep
+cat $(which $*);
+cecho reset keep
