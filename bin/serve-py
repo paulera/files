@@ -14,9 +14,7 @@ if [ ! -z $1 ]; then
 
 fi
 
-php -S 127.0.0.1:$PORT
-
-
+python -m SimpleHTTPServer $PORT
 
 
 
