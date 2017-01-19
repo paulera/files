@@ -16,12 +16,10 @@ fi
 
 BAR=$(sed "s/./-/g" <<< "$FILE")
 
-cecho dgray "# +-"$BAR"-+\n"
-cecho dgray "# | " 
-cecho yellow $FILE;
-cecho dgray " | \n" 
-cecho dgray "# +-"$BAR"-+\n"
+#cecho dgray "# +-"$BAR"-+\n"
+#cecho dgray "# | " 
+#cecho yellow $FILE;
+#cecho dgray " | \n" 
+#cecho dgray "# +-"$BAR"-+\n"
 
-cecho white keep
 cat $(which $*);
-cecho reset keep
