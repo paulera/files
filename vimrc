@@ -32,6 +32,8 @@ set hlsearch   "Highlight search results
 set ruler      "Show current position in document
 set title      " change terminal title to the current file
 
+set noeb vb t_vb= " solves freezing issue when scrolling out of bounds with the mouse
+
 " With a map leader it's possible to do extra key combinations
 " like <leader>w saves the current file
 let mapleader = ","
