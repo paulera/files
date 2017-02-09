@@ -1,0 +1,5 @@
+#!/bin/bash
+
+for i in $*; do
+    lsof -P -n -i4TCP:$i | grep -i listen | awk '{ print $2"\t"$1"\t"$3"\t"$8"\t"$9; }'
+done
