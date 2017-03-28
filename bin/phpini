@@ -11,7 +11,7 @@ if [ "$1" == "--help" ]; then
     exit 1;
 fi
 
-INIFILE=$(php --ini | grep Loaded | sed 's/^.*File:[ ]\+//g')
+INIFILE=$(php --ini | grep Loaded | sed 's/.*File:[[:space:]]*//g')
 
 if [ ! -f "$INIFILE" ]; then
     echo "Can't extract the php.ini path. Run"
