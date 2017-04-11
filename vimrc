@@ -111,3 +111,7 @@ noremap <leader><space> :noh<cr>:call clearmatches()<cr>
 " read .ino files as C 
 filetype on
 au BufNewFile,BufRead *.ino set filetype=c
+
+" Keep visual selection after indenting
+:vnoremap < <gv
+:vnoremap > >gv
