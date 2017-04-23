@@ -26,14 +26,14 @@ curl -s "https://securityheaders.io/?q="$SITE"&hide=on&followRedirects=on" > $TE
 
 cat $TEMP1 | \
 sed 's/container/fluid-container/g' | \
-sed "s/[ ]*\(class\|id\)=[\"'][-0-9a-z_ #]\+[ ]*[\"']//gI" | \
+sed "s/[ ]*\(class\|id\)=[\"'][-0-9a-z_ #]\+[ ]*[\"']//g" | \
 sed 's/th>/td>/g' | \
-sed 's/<td>headers:<\/td>/<td><\/td>/gI' | \
+sed 's/<td>headers:<\/td>/<td><\/td>/g' | \
 grep -v "<li><i></i>" \
 > $TEMP2
 
 echo -n "SCORE: "
-w3m -cols 5000 -dump $TEMP2 | tail --lines=+15 | head -n -5
+w3m -cols 5000 -dump $TEMP2 | tail --lines=+17 | head -n -5
 
 rm $TEMP1
 rm $TEMP2
