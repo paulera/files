@@ -39,7 +39,7 @@ fi
 
 
 if [ ! -f $ARQ ]; then
-	vim -c ":read $FILESROOT/script_template | set syntax=sh" +3 $ARQ
+	vim -c ":read $FILESROOT/script_template.py | set syntax=python" +3 $ARQ
 	if [ -f $ARQ ]; then
 		echo ""
 		cecho green "Script saved as "
