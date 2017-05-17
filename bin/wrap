@@ -1,0 +1,4 @@
+#!/bin/bash
+
+tput smam
+echo "Line wrapping enabled"

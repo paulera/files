@@ -1,0 +1,4 @@
+#!/bin/bash
+
+tput rmam
+echo "Line wrapping enabled"
