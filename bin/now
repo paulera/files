@@ -4,6 +4,9 @@
 
 if [ "$1" == "stamp" ]; then
 	date +"%T" | sed s/://g
+elif [ "$1" == "clock" ]; then
+    echo ""
+    while :; do echo -n -e "  "$(date +"%Y-%m-%d") $(date +"%T")"\r"; sleep 1; done;
 else
 	date +"%T"
 fi
