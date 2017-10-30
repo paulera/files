@@ -1,0 +1,40 @@
+#!/bin/bash
+
+bash --rcfile <(echo '
+. ~/.bash_profile;
+
+export PATH=$PATH:/mingw64/bin
+export PATH=$PATH:/usr/bin
+
+function timer_start {
+  S=`echo $(($(date +%s%N)/1000000))`
+  timer=${timer:-$S}
+}
+
+function timer_stop {
+  S=`echo $(($(date +%s%N)/1000000))`
+  ms=$(($S - $timer))
+  time_to_format=$(awk "BEGIN {printf(\"%.3f\", 82800.0+($ms/1000.0)); exit}")
+  timer_show=$(date -d @$time_to_format +"%H:%M:%S.%N" | head -c 12)
+  echo -ne "\e]0;FlyMode [$ms]\a";
+  unset timer
+}
+
+trap '"'"'timer_start'"'"' DEBUG
+
+if [ "$PROMPT_COMMAND" == "" ]; then
+  PROMPT_COMMAND="timer_stop"
+else
+  PROMPT_COMMAND="$PROMPT_COMMAND; timer_stop"
+fi
+
+PS1="\[\e[1;34;40m\]"'"'"'${timer_show}'"'"'"\[\e[1;34;40m\]> \[\e[m\]"
+
+sPS1="\[\e[1;34;40m\]${timer_show}\[\e[1;34;40m\]> \[\e[m\]";
+shopt -s checkwinsize;
+echo -e "\n------------------------\nFly mode, Ctrl+D to quit\n------------------------\n"
+
+echo -ne "\e]0;FlyMode\a";
+
+
+')
