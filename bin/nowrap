@@ -1,4 +1,4 @@
 #!/bin/bash
 
 tput rmam
-echo "Line wrapping enabled"
+echo "Line wrapping disabled"
