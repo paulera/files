@@ -1,34 +1,64 @@
 #!/bin/bash
 
+PERF=~/.files_performance
+PERF_ENABLE=0
+
 # ----------------------------------------------------------------------
 # Edit your ~/.bashrc ou /etc/bah.bashrc file, and make it run this file
 # if [ -f ~/files/bash.d/run_bash ]; then . ~/files/bash.d/run_bash; fi
 # ----------------------------------------------------------------------
 if [ ! -z $BASH_SOURCE ]; then
-	#using bash 3 or higher
-	BASHDFOLDER=$(dirname $BASH_SOURCE)
+        #using bash 3 or higher
+        BASHDFOLDER=$(dirname $BASH_SOURCE)
 else
-	BASHDFOLDER=$(dirname $0)
+        BASHDFOLDER=$(dirname $0)
+fi
+
+if [ $PERF_ENABLE  == 1 ]; then
+        touch $PERF
+        echo -n "" > $PERF
 fi
 
 if [ -d $BASHDFOLDER ]; then
-	for i in $BASHDFOLDER/*.sh; do
-		if [ -r $i ]; then
-			. $i
-		fi
-	done
-	unset i
+        for i in $BASHDFOLDER/*.sh; do
+                if [ -r $i ]; then
+                        if [ $PERF_ENABLE == 1 ]; then
+                                TI=`date +%s%N`
+                        fi
+                        . $i
+                        if [ $PERF_ENABLE == 1 ]; then
+                                TF=`date +%s%N`
+                                TOT=`expr \( $TF - $TI \) / 1000000`
+                                echo $TOT" : "$i >> $PERF
+                        fi
+                fi
+        done
+        unset i
 else
-	echo "run_bash: Problems with directories structure. Aborted!"
+        echo "run_bash: Problems with directories structure. Aborted!"
 fi
 
 BASHDFOLDER=$(readlink -m ~)"/bash.d"
 
 if [ -d $BASHDFOLDER ]; then
-	for i in $BASHDFOLDER/*.sh; do
-		if [ -r $i ]; then
-			. $i
-		fi
-	done
-	unset i
+        for i in $BASHDFOLDER/*.sh; do
+                if [ -r $i ]; then
+                        if [ $PERF_ENABLE == 1 ]; then
+                                TI=`date +%s%N`
+                        fi
+                        . $i
+                        if [ $PERF_ENABLE == 1 ]; then
+                                TF=`date +%s%N`
+                                TOT=`expr \( $TF - $TI \) / 1000000`
+                                echo $TOT" : "$i >> $PERF
+                        fi
+                fi
+        done
+        unset i
 fi
+
+if [ $PERF_ENABLE == 1 ] && [ -f $PERF ]; then
+        cat $PERF | sort -nr > $PERF
+
+fi
+
