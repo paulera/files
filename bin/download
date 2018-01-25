@@ -1,5 +1,16 @@
 #!/bin/bash
 
-# command -v wget >/dev/null && { wget $1; }
-command -v curl >/dev/null && { curl -O $1; }
+if [ -f "$1" ]; then
+    read -p "Do you want to download all files listed in "$1"? (y/N) " -n 1 -r ASK
+    if [[ $ASK =~ ^[Yy]$ ]]; then
+        for i in $(cat "$1"); do
+            echo "Downloading "$i"..."
+            download "$i"
+            echo "----------------------------------------------"
+        done
+    fi
+else
+    command -v curl >/dev/null && { curl -O "$1"; }
+fi
+
 
