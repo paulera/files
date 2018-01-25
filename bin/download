@@ -1,5 +1,5 @@
 #!/bin/bash
 
-command -v wget >/dev/null && { wget $1; }
+# command -v wget >/dev/null && { wget $1; }
 command -v curl >/dev/null && { curl -O $1; }
 
