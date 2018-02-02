@@ -1,0 +1,8 @@
+#!/bin/bash
+
+if [ -z $1 ]; then
+    stat -c '%A %a %N' *
+else
+    stat -c '%A %a %N' * | GREP_COLOR="1;33" grep --color=always -i -e "$*\|$"
+fi
+    
