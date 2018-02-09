@@ -1,13 +1,24 @@
 #!/bin/bash
-
+echo
 i=0
 while read -r l; do
 	((++i))
 
 	if [ -z $1 ]; then
-		echo -e "$i\t$l"
+
+        type=$(echo $l | sed 's/^ *//' | awk '{ print $1; }')
+        if [ "$type" == "D" ]; then
+            cecho red keep;
+        #elif [ "$type" == "M" ]; then
+        #    cecho reset;
+        elif [ "$type" == "??" ]; then
+            cecho green keep;
+        fi
+	    echo -e "    ${i}\t${l}"
+	    cecho reset
 	elif [ "$1" == "$i" ]; then
-		echo $l | sed 's/^[^[:blank:]]\+[[:blank:]]\+//g'
+		filename=$(echo $l | sed 's/^ *. *//')
+		git diff $filename
 	fi
 done < <(git status -s);
-
+echo
