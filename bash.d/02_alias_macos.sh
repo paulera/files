@@ -1,5 +1,5 @@
 ###############################
-# ALIASES EXXCLUSIVE FO MACOS #
+# ALIASES EXCLUSIVE FOR MACOS #
 ###############################
 
 # lock computer
