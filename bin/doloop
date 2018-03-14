@@ -2,6 +2,12 @@
 
 INTERVAL="1"
 
+clear
+echo "$(date)"
+echo "$*"
+echo "------------------------------"
+$*
+
 while :; do
 	
 	RESULT=$($* &> /dev/stdout)
