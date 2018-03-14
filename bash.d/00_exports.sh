@@ -20,7 +20,9 @@ if [ "$FILES_ENV" == "mac" ]; then
 	fi
 fi
 
-export HOME=$(readlink -m ~)
+if [ -z $HOME ]; then
+	export HOME=$(readlink -m ~)
+fi
 
 if [ ! -z $BASH_SOURCE ]; then
 	#using bash 3 or higher
