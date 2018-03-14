@@ -3,10 +3,15 @@
 INTERVAL="1"
 
 while :; do
+	
+	RESULT=$($* &> /dev/stdout)
+	
 	clear
 	echo "Command: $*"
 	echo "$(date)"
 	echo "------------------------------"
-	$*
+	echo "$RESULT"
+
 	sleep $INTERVAL
+
 done
