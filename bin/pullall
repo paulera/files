@@ -1,0 +1,32 @@
+#!/bin/bash
+
+for i in */; do
+    if [ -d $i".git" ]; then
+        
+        echo
+        cecho cyan "------> "$(readlink -m $i)
+        echo
+        echo
+
+        cd $i
+
+        ORIGINAL_BRANCH=$(git branch --color=never | grep "^\*" | awk '{ print $2; }')
+        while read branch; do
+            cecho reset "Updating branch "
+            cecho yellow $branch
+            cecho reset " ..."
+            echo
+            if [ "$branch" != "$ORIGINAL_BRANCH" ]; then
+                git checkout $branch
+            fi
+            git fetch --progress --prune --recurse-submodules=no origin
+            git pull &>/dev/stdout | grep -i --color "^\|error"
+            echo
+        done < <(git branch | sed 's/^[\* ] //g')
+        cecho reset "Switching back to "
+        cecho yellow $ORIGINAL_BRANCH
+        cecho reset " branch"
+        echo
+        cd ..
+    fi
+done
