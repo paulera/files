@@ -1,0 +1,18 @@
+#!/bin/bash
+
+CCZE=""
+if type ccze &> /dev/null; then
+    CCZE="ccze -A -c default=white"
+else
+    CCZE="cat"
+fi
+
+tail -f $* | $CCZE | while read line; do
+
+    icon="⚡️";
+    if [[ $line =~ .*([^a-z]error[^a-z]|exception[^a-z]).* ]]; then
+        icon="💩";
+    fi
+
+    echo -n -e "$icon $line\n\n"
+done
