@@ -2,11 +2,22 @@
 
 INTERVAL="1"
 
+clear
+echo "$(date)"
+echo "$*"
+echo "------------------------------"
+$*
+
 while :; do
+	
+	RESULT=$($* &> /dev/stdout)
+	
 	clear
-	echo "Command: $*"
 	echo "$(date)"
+	echo "$*"
 	echo "------------------------------"
-	$*
+	echo "$RESULT"
+
 	sleep $INTERVAL
+
 done
