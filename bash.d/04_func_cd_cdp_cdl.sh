@@ -1,9 +1,8 @@
 cd() {
     if [ -z "$1" ]; then
-        pushd ~ &> /dev/null
+        pushd ~ > /dev/null
     else
-        
-        pushd "$*" &> /dev/null
+        pushd "$*" > /dev/null
     fi
 }
 
