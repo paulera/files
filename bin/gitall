@@ -1,0 +1,12 @@
+#!/bin/bash
+
+for i in *; do
+    if [ -d "$i/.git" ]; then
+        cecho cyan "-----> "$i
+        echo
+        cd $i
+        git $*
+        cd .. 
+        echo
+    fi
+done
