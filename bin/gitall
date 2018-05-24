@@ -1,5 +1,8 @@
 #!/bin/bash
 
+echo -n -e "\nCOMMAND: "
+cecho yellow "$(basename $0) $*\n\n"
+
 for i in *; do
     if [ -d "$i/.git" ]; then
         cecho cyan "-----> "$i
