@@ -37,6 +37,6 @@ alias gbr='git branch'
 alias gad='git add -A'
 alias gpl='git pull'
 alias gpu='git push'
-alias  glg='git log --date-order --all --graph               --date="format:%d-%m-%Y %H:%M" --format="%C(green)%h%Creset %C(yellow)%an%Creset %C(blue bold)%ad%Creset %C(red bold)%d %Creset%s"'
-alias glg2='git log --date-order --all --graph --name-status --date="format:%d-%m-%Y %H:%M" --format="%C(green)%h%Creset %C(yellow)%an%Creset %C(blue bold)%ad%Creset%C(red bold)%d %Creset %C(white bold)%s%Creset"'
+alias glg2='git log --date-order --all --graph               --date="format:%d-%m-%Y %H:%M" --format="%C(green)%h%Creset %C(yellow)%an%Creset %C(blue bold)%ad%Creset %C(red bold)%d %Creset%s"'
+alias glg='git log --date-order --all --graph --name-status --date="format:%d-%m-%Y %H:%M" --format="%C(green)%h%Creset %C(yellow)%an%Creset %C(blue bold)%ad%Creset%C(red bold)%d %Creset %C(white bold)%s%Creset"'
 
