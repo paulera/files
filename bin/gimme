@@ -1,8 +1,15 @@
 #!/bin/bash
 
 git1() {
-    STASH="gimme-cmd-stash-"$(date +"%s")i
-    git stash save $STASH && git fetch && git checkout $1 && git pull && git stash pop $STASH
+    STASH="gimme-cmd-stash-"$(date +"%s")
+    git stash save $STASH
+    STASH_REF="$(git stash list | grep "$STASH" | awk -F: '{ print $1 }')"
+    git fetch && git checkout $1 && git pull
+    if [ "$STASH_REF" != "" ]; then
+        git stash pop "$STASH_REF"
+    else
+        echo "No local changes, nothing was stashed"
+    fi
 }
 
 git2() {
