@@ -17,6 +17,10 @@ cdl() {
         echo
         dirs -v -p | tail -n +2
         echo
+        read -p "Where to? " DIRNUM
+        if [[ $DIRNUM =~ ^[0-9]+$ ]] ; then
+            cdl $DIRNUM
+        fi
     fi
 }
 
