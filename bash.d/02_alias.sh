@@ -3,7 +3,7 @@
 ###########
 
 # ls
-alias ll='ls -lh --group-directories-first --time-style=long-iso'
+alias ll='ls -lh --group-directories-first --time-style=long-iso -N'
 alias ls='ls --color=always'
 
 # mkdir - create subdirs automatically
