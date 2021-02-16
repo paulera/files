@@ -3,10 +3,14 @@
 ###########
 
 # ls
-unalias ll
+if [ "(type -t ll)" == "alias" ]; then
+	unalias ll
+fi
 alias ll='ls -lh --group-directories-first --time-style=long-iso -N'
 
-unalias ls
+if [ "(type -t ls)" == "alias" ]; then
+	unalias ls
+fi
 alias ls='ls --color=always'
 
 # mkdir - create subdirs automatically

@@ -22,9 +22,23 @@ function bin() { filesfolder bin $1; }
 
 # pastas do dia a dia
 
-function work() { cd $HOME/workspace; }
+if [ -d $HOME/workspace ]; then 
+    function work() { cd $HOME/workspace; }
+else
+    function work() { echo "Directory $HOME/workspace not found to bind the shortcut"; }
+fi
+
 function down() { cd $HOME/downloads; }
 function desk() { cd $HOME/desktop; }
-function img() { cd $HOME/images; }
+
+if [ -d $HOME/images ]; then
+    function img() { cd $HOME/images; }
+elif [ -d $HOME/pictures ]; then
+    function img() { cd $HOME/pictures; }
+else
+    function img() { echo "Directory $HOME/images or $HOME/pictures not found to bind the shortcut"; }
+fi
+
+
 function doc() { cd $HOME/documents; }
 function mp3() { cd $HOME/mp3; }
