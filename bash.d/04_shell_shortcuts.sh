@@ -28,6 +28,12 @@ else
     function work() { echo "Directory $HOME/workspace not found to bind the shortcut"; }
 fi
 
+if [ -d $HOME/src ]; then 
+    function src() { cd $HOME/src; }
+else
+    function src() { echo "Directory $HOME/src not found to bind the shortcut"; }
+fi
+
 function down() { cd $HOME/downloads; }
 function desk() { cd $HOME/desktop; }
 
