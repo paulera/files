@@ -20,6 +20,10 @@ if [ "$1" == "2" ]; then
     
     ARQ=$BINFOLDER"/"$2
 
+elif [ -f $FILESROOT/bin/$1 ]; then
+    
+    ARQ=$FILESROOT"/bin/"$1
+
 else
 
     BINFOLDER=$HOME"/bin"
