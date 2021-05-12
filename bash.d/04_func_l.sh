@@ -1,6 +1,6 @@
 # minimal file listing
 
-if [ "(type -t l)" == "alias" ]; then
+if [ "$(type -t l)" == "alias" ]; then
         unalias l
 fi
 

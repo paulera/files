@@ -1,0 +1,51 @@
+#!/bin/bash
+
+usage() {
+    echo "Creates a symbolic link for an executable file in ~/bin"
+    echo "Usage: linkbin <executable> [link name]"
+    echo "    executable: a valid binary or script"
+    echo "    link name: the link that will be created. Optional."
+}
+
+if [ ! $1 ] || [ "$1" == "--help" ]; then
+    usage
+    exit 1
+fi
+
+if [ ! -f "$1" ]; then
+    echo "File $1 not found"
+    exit 1
+fi
+
+if [ ! -d ~/bin ]; then
+    echo "Creating ~/bin"
+    mkdir ~/bin
+    if [ ! -d "~/bin" ]; then
+        echo "Failed"
+        exit 1
+    fi
+fi
+
+if [ ! $2 ]; then
+    file=$(basename $1)
+    filename="${file%.*}"
+    linkname=${filename,,}
+else
+    linkname=$2
+fi
+
+linkpath=~/bin/$linkname
+
+if [ -f $linkpath ]; then
+    echo "Can't create $linkpath. File already exists."
+    exit 1
+fi
+
+ln -s $(readlink -m $1) $linkpath
+
+if [ -f $linkpath ] && [ "$(readlink -m $linkpath)" == "$(readlink -m $1)" ]; then
+    echo "$linkpath created successfully"
+    exit 0
+else
+    echo "Failed."
+fi
