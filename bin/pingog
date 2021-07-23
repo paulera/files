@@ -22,7 +22,7 @@ fi
 echo Pinging $TARGET. Ctrl+C to quit.
 echo
 
-while true; do
+while :; do
     RESULT=$(ping $TARGET -n 1)
     cecho reset "\r$(now) "
     if [[ $RESULT =~ ^.*could\ not\ find\ host.*$ ]]; then
@@ -33,20 +33,11 @@ while true; do
         cecho yellow "DESTINATION UNREACHABLE"
         cecho reset " (O.o)\n"
     elif [[ $RESULT =~ .*Reply\ from.* ]]; then
-        # this was broken
-        #IP=$(echo "$RESULT" | grep "Reply from" | cut -d\  -f3 | sed "s/://")
-        #LONGTIME=$(echo "$RESULT" | grep "Reply from" | cut -d\  -f5)
-        #SHORTTIME=$(echo "$RESULT" | grep "Reply from" | cut -d\  -f 5 | sed "s/time=\([0-9]\+\)ms/\1/g")
         
-        IP=$(echo "$RESULT" | grep "Reply from" | cut -d\  -f3)
-        LONGTIME=$(echo "$RESULT" | grep "Reply from" | cut -d\  -f4)
-        SHORTTIME=$(echo "$RESULT" | grep "Reply from" | cut -d\  -f4 | sed "s/time=\([0-9]\+\)ms/\1/g")
+        IP=$(echo "$RESULT" | grep "Reply from" | cut -d\  -f3 | cut -d: -f1)
+        SHORTTIME=$(echo "$RESULT" | tail -1 | rev | cut -d\  -f1 | rev | sed 's/[^0-9]*//g')
 
         cecho white "[$IP] "
-
-        if [ "$LONGTIME" == "time<1ms" ]; then
-            SHORTTIME=0;
-        fi
 
         if [ $SHORTTIME -le $WOW ]; then
             title $TARGET"=WOW"
