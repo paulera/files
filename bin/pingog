@@ -61,11 +61,11 @@ while :; do
             cecho red    "SLOW"            
         fi
 
-        echo -n " | "
+        #echo -n " | "
 
-        printf "%4s ms" $SHORTTIME
+        printf " %4s ms " $SHORTTIME
 
-        echo -n " | "
+        #echo -n " | "
         
         if [ $SHORTTIME -gt 0 ]; then
             cecho cyan keep
