@@ -9,7 +9,8 @@ bar() {
 }
 
 function title() {
-    echo -ne "\e]0;$1\a";
+    #echo -ne "\e]0;$1\a";
+    printf '\e]2;%s\a' "$1"
 }
 
 
@@ -23,7 +24,14 @@ echo Pinging $TARGET. Ctrl+C to quit.
 echo
 
 while :; do
-    RESULT=$(ping $TARGET -n 1)
+
+    if [[ "$(file $(which ping))" == *"Mach-O"* ]]; then
+        # Apple's ping executable
+        RESULT=$(ping $TARGET -c 1)
+    else
+        RESULT=$(ping $TARGET -n 1)
+    fi
+
     cecho reset "\r$(now) "
     if [[ $RESULT =~ ^.*could\ not\ find\ host.*$ ]]; then
         title $TARGET" (x_x)"
@@ -32,10 +40,10 @@ while :; do
     elif [[ $RESULT =~ ^.*Destination\ net\ unreachable.*$ ]]; then
         cecho yellow "DESTINATION UNREACHABLE"
         cecho reset " (O.o)\n"
-    elif [[ $RESULT =~ .*Reply\ from.* ]]; then
+    elif [[ $RESULT =~ .*\ from\ .* ]]; then
         
-        IP=$(echo "$RESULT" | grep "Reply from" | cut -d\  -f3 | cut -d: -f1)
-        SHORTTIME=$(echo "$RESULT" | grep time= | awk -Ftime= '{ print $2 }' | awk -Fms '{ print $1 }'| sed 's/^[0-9\.]+//g')
+        IP=$(echo "$RESULT" | grep " from " | awk -F"from " '{ print $2 }' | awk -F: '{ print $1 }')
+        SHORTTIME=$(echo "$RESULT" | grep time= | awk -Ftime= '{ print $2 }' | awk -Fms '{ print $1 }' | awk -F\. '{ print $1 }')
 
         cecho white "[$IP] "
 
@@ -80,7 +88,7 @@ while :; do
         fi
 
         cecho reset "\n"
-
+        
         sleep 0.5s
 
     fi
