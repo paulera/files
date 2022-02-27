@@ -1,0 +1,37 @@
+#!/bin/bash
+
+# This script displays how deep in bash calls you are
+THIS_SCRIPT=$(basename $0)
+PSTREE=$(pstree --ascii -s -p $$)
+BASH_COUNT=$(echo $PSTREE | sed 's/---/\n/g' | grep -v "pstree\|$THIS_SCRIPT" | grep "^bash(" | wc -l)
+BASHES=$(( BASH_COUNT - 1 ))
+
+if [ "$1" == "-n" ]; then
+    echo $BASHES
+    exit 1
+elif [ "$1" == "--help" ]; then
+    echo "Usage: $THIS_SCRIPT [-n|--help]"
+    echo
+    echo "Display how deep you are in nested bash sessions."
+    echo "If this is you topmost shell, return 0"
+    echo "For each shell you open inside it, the counter increases"
+    echo
+    echo "Options:"
+    echo "    -n       Only shows the number"
+    echo "    --help   This help"
+    echo
+    echo "Running without parameters should give you a verbose output"
+    echo
+    exit 1
+fi
+
+if [ $BASHES == 0 ]; then
+    echo "There are no nested shells. Hit [Ctrl+D] to kill this session."
+    exit 0
+else
+    echo "You are $BASHES level deep into shell nesting."
+    exit 0
+fi
+
+
+
