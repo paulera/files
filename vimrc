@@ -30,7 +30,9 @@ set autowrite  "Save on buffer switch
 "set mouse=a
 set hlsearch   "Highlight search results 
 set ruler      "Show current position in document
-set title      " change terminal title to the current file
+
+"Disabled because it leaves 'Thanks for flyhing Vim' as title when leave
+"set title      " change terminal title to the current file
 
 set noeb vb t_vb= " solves freezing issue when scrolling out of bounds with the mouse
 
@@ -115,3 +117,4 @@ au BufNewFile,BufRead *.ino set filetype=c
 " Keep visual selection after indenting
 :vnoremap < <gv
 :vnoremap > >gv
+
