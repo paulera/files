@@ -20,7 +20,7 @@ fi
 if [ ! -d ~/bin ]; then
     echo "Creating ~/bin"
     mkdir ~/bin
-    if [ ! -d "~/bin" ]; then
+    if [ ! -d ~/bin ]; then
         echo "Failed"
         exit 1
     fi
