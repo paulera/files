@@ -1,6 +1,6 @@
 #!/bin/bash
 if [ -z $1 ]; then
-    curl -s ipinfo.io | grep -v "\{\|\}" | awk -F\" '{ print $2":"$4 }'
+    curl -s ipinfo.io | grep -v "\{\|\}" | grep -v "\"readme\":" | awk -F\" '{ print $2":"$4 }'
 else
     curl -s ipinfo.io/$1
 fi
