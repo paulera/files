@@ -25,7 +25,7 @@ echo
 
 while :; do
 
-    if [[ "$(file $(which ping))" == *"Mach-O"* ]]; then
+    if [[ "$(file $(which ping))" == *"Mach-O"* ]] || [ x"$(ping --help |& grep '\-c <count>')" != "x" ]; then
         # Apple's ping executable
         RESULT=$(ping $TARGET -c 1)
     else
