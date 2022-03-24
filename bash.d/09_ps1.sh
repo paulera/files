@@ -28,6 +28,10 @@ newps() {
         echo -n $(c '1;34')$1$(c '0')
     }
 
+    cyan() {
+        echo -n $(c '1;36')$1$(c '0')
+    }
+
     white() {
         echo -n $(c '1;37')$1$(c '0')
     }
@@ -47,7 +51,8 @@ newps() {
     if [ "$(id -u)" -eq 0 ]; then
 		# root
 export PS1="\
-$(red \\u@\\h) \
+$(red \\u) \
+$(cyan @\\h) \
 $(blue \\w) \
 \\$ "
 	else
@@ -61,7 +66,8 @@ $(blue \\w) \
         else
 export PS1="\
 $(purple "\$(ps1_tor)")\
-$(green \\u@\\h) \
+$(green \\u) \
+$(cyan @\\h) \
 $(white "\$(__git_ps1 '(%s) ')")\
 $(blue \\w) \
 \\$ "
