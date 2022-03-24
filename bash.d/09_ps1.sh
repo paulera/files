@@ -31,6 +31,10 @@ newps() {
     cyan() {
         echo -n $(c '1;36')$1$(c '0')
     }
+    
+    yellow() {
+        echo -n $(c '1;33')$1$(c '0')
+    }
 
     white() {
         echo -n $(c '1;37')$1$(c '0')
