@@ -6,6 +6,10 @@
 
 export GIT_PS1_SHOWDIRTYSTATE=1
 
+__git_ps1_abbreviated() {
+    __git_ps1 '(%s) ' | sed -E 's#([^/]{15})[^/]{13,}([^/.]{10})#\1...\2#g'
+}
+
 newps() {
 
 	c() {
@@ -64,7 +68,7 @@ $(blue \\w) \
         if [ "$1" == "local" ]; then
 export PS1="\
 $(purple "\$(ps1_tor)")\
-$(white "\$(__git_ps1 '(%s) ')")\
+$(white "\$(__git_ps1_abbreviated)")\
 $(blue \\w) \
 \\$ "
         else
@@ -72,7 +76,7 @@ export PS1="\
 $(purple "\$(ps1_tor)")\
 $(green \\u) \
 $(cyan @\\h) \
-$(white "\$(__git_ps1 '(%s) ')")\
+$(white "\$(__git_ps1_abbreviated)")\
 $(blue \\w) \
 \\$ "
         fi
