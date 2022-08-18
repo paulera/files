@@ -1,23 +1,27 @@
 #!/bin/bash
 
 INTERVAL="1"
+CMD="$*"
 
-clear
-echo "$(date)"
-echo "$*"
-echo "------------------------------"
-$*
+show() {
+	RESULT="$($1 2>&1 /dev/stdout)"
+    clear
+    echo ""
+    echo ""
+    echo ""
+    echo ""
+    $1
+    tput cup 0 0 
+    echo "$(date)"
+    echo "$1"
+    echo "------------------------------"
+}
+
+show "${CMD}"
 
 while :; do
 	
-	RESULT=$($* &> /dev/stdout)
-	
-	clear
-	echo "$(date)"
-	echo "$*"
-	echo "------------------------------"
-	echo "$RESULT"
-
+	show "${CMD}"
 	sleep $INTERVAL
 
 done
