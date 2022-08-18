@@ -1,7 +1,6 @@
 #!/bin/bash
 
-PERF=~/.files_performance
-PERF_ENABLE=0
+PERF=~/.files_profile
 
 # ----------------------------------------------------------------------
 # Edit your ~/.bashrc ou /etc/bah.bashrc file, and make it run this file
@@ -14,51 +13,33 @@ else
         BASHDFOLDER=$(dirname $0)
 fi
 
-if [ $PERF_ENABLE  == 1 ]; then
-        touch $PERF
-        echo -n "" > $PERF
+if [ -f $PERF ]; then
+    echo -n "" > $PERF
 fi
 
-if [ -d $BASHDFOLDER ]; then
-        for i in $BASHDFOLDER/*.sh; do
-                if [ -r $i ]; then
-                        if [ $PERF_ENABLE == 1 ]; then
-                                TI=`date +%s%N`
-                        fi
-                        . $i
-                        if [ $PERF_ENABLE == 1 ]; then
-                                TF=`date +%s%N`
-                                TOT=`expr \( $TF - $TI \) / 1000000`
-                                echo $TOT" : "$i >> $PERF
-                        fi
+source_all_scripts() {
+    FOLDER=$1
+    echo $FOLDER
+    if [ -d $FOLDER ]; then
+        for i in $FOLDER/*.sh; do
+            if [ -r $i ]; then
+                if [ -f $PERF ]; then
+                    TI=`date +%s%N`
+                    . $i
+                    TF=`date +%s%N`
+                    TOT=`expr \( $TF - $TI \) / 1000000`
+                    printf "%05d ${i}\n" "${TOT}" >> $PERF
+                else
+                    . $i
                 fi
+            fi
         done
         unset i
-else
-        echo "run_bash: Problems with directories structure. Aborted!"
+    fi
+}
+
+source_all_scripts "${BASHDFOLDER}"
+if [ -d ~/bash.d ]; then
+    source_all_scripts ~/bash.d
 fi
-
-BASHDFOLDER=$(readlink -m ~)"/bash.d"
-
-if [ -d $BASHDFOLDER ]; then
-        for i in $BASHDFOLDER/*.sh; do
-                if [ -r $i ]; then
-                        if [ $PERF_ENABLE == 1 ]; then
-                                TI=`date +%s%N`
-                        fi
-                        . $i
-                        if [ $PERF_ENABLE == 1 ]; then
-                                TF=`date +%s%N`
-                                TOT=`expr \( $TF - $TI \) / 1000000`
-                                echo $TOT" : "$i >> $PERF
-                        fi
-                fi
-        done
-        unset i
-fi
-
-if [ $PERF_ENABLE == 1 ] && [ -f $PERF ]; then
-        cat $PERF | sort -nr > $PERF
-
-fi
-
+unset -f source_all_scripts
