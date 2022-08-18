@@ -1,0 +1,17 @@
+#!/bin/bash
+
+sudo apt-get install \
+    pandoc\
+    texlive-latex-base\
+    texlive-fonts-recommended\
+    texlive-fonts-extra\
+    texlive-latex-extra\
+    texlive-extra-utils\
+    texlive-xetex\
+
+# Troubleshoot:
+# Error: I can't find the format file pdflatex.fmt
+# sudo texconfig rehash
+
+echo "To convert documents, do"
+echo "pandoc FILE.md -o FILE.pdf"
