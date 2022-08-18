@@ -83,7 +83,7 @@ return [
         'private'   => ['red'],
         'global'    => ['cyan', null, ['bold']],
         'const' => ['cyan'],
-        'class' => ['blue', null, ['underscore']],
+        'class' => ['blue', null, ['underscore', 'bold']],
         'function'  => [null],
         'default'   => [null],
 
