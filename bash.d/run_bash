@@ -19,7 +19,6 @@ fi
 
 source_all_scripts() {
     FOLDER=$1
-    echo $FOLDER
     if [ -d $FOLDER ]; then
         for i in $FOLDER/*.sh; do
             if [ -r $i ]; then
