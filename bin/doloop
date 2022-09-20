@@ -4,17 +4,12 @@ INTERVAL="1"
 CMD="$*"
 
 show() {
-	RESULT="$($1 2>&1 /dev/stdout)"
+	RESULT="$($1 2>&1)"
     clear
-    echo ""
-    echo ""
-    echo ""
-    echo ""
-    $1
-    tput cup 0 0 
     echo "$(date)"
     echo "$1"
     echo "------------------------------"
+    echo "${RESULT}"
 }
 
 show "${CMD}"
