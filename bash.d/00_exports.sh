@@ -34,7 +34,7 @@ else
 fi
 
 if [ -d $BASHDFOLDER ]; then
-	export FILESROOT="$(dirname $BASHDFOLDER)"
+	export FILESROOT="$(readlink -m $(dirname $BASHDFOLDER))"
 else
 	echo "00_exports.sh: Problems with directories structure. Aborted!"
 fi
