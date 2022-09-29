@@ -1,6 +1,10 @@
 #!/bin/bash
 
 PERF=~/.files_profile
+DEBUG=0
+if [ -f ~/.files_debug ]; then
+    DEBUG=1
+fi
 
 # ----------------------------------------------------------------------
 # Edit your ~/.bashrc ou /etc/bah.bashrc file, and make it run this file
@@ -15,20 +19,46 @@ fi
 
 if [ -f $PERF ]; then
     echo -n "" > $PERF
+    if [ $DEBUG = 1 ]; then
+        echo "'files' performance profiling is ON"
+        echo "saving results to ${PERF}"
+    fi
 fi
 
 source_all_scripts() {
     FOLDER=$1
+
+    if [ $DEBUG = 1 ]; then
+        echo -e "\nProcessing files from ${FOLDER}\n"
+    fi
+
     if [ -d $FOLDER ]; then
         for i in $FOLDER/*.sh; do
             if [ -r $i ]; then
+
+
                 if [ -f $PERF ]; then
+
+                    if [ $DEBUG = 1 ]; then
+                        echo -n "Running ${i} ... "
+                    fi
+
                     TI=`date +%s%N`
                     . $i
                     TF=`date +%s%N`
-                    TOT=`expr \( $TF - $TI \) / 1000000`
+                    TOT=`expr \( $TF - $TI \) / 1000000`                    
                     printf "%05d ${i}\n" "${TOT}" >> $PERF
+
+                    if [ $DEBUG = 1 ]; then
+                        echo "${TOT} ms"
+                    fi
+                
                 else
+
+                    if [ $DEBUG = 1 ]; then
+                        echo "Running ${i}"
+                    fi
+
                     . $i
                 fi
             fi
