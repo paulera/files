@@ -1,0 +1,84 @@
+#!/bin/bash
+
+DEBUG=1
+
+usage() {
+    echo "Usage: $(basename $0) <file to pack>"
+    echo "Compress a file as <file to pack>_YYYYMMDD_HHMMSS.zip and remove the original file."
+    echo "Use this script as mechanism to produce log rotation"
+    echo "Example: $(basename $0) /var/log/logtorotate.log"
+    echo "         A file /var/log/logtorotate.log_YYYYMMDD_HHMMSS.zip will be created"
+    echo "         and the original file will be removed."
+}
+
+debug_log() {
+    [ "$DEBUG" = "1" ] && echo "$1"
+}
+
+FILE_PATH=$(readlink -m "$1")
+FOLDER=$(dirname -- "$FILE_PATH")
+FILE=$(basename -- "$FILE_PATH")
+FILENAME="${FILE%.*}"
+EXTENSION=""
+[[ $FILE =~ \. ]] && EXTENSION=".${FILE##*.}"
+TODAY=$(date +"%Y-%m-%d" | sed s/-//g)
+NOW=$(date +"%T" | sed s/://g)
+
+TEMP_FILE="${FOLDER}/${FILENAME}${EXTENSION}_${TODAY}_${NOW}"
+ZIP_FILE="${FOLDER}/${FILENAME}${EXTENSION}_${TODAY}_${NOW}.zip"
+
+
+debug_log "FILE_PATH = $FILE_PATH"
+debug_log "FOLDER = $FOLDER"
+debug_log "FILE = $FILE"
+debug_log "FILENAME = $FILENAME"
+debug_log "EXTENSION = $EXTENSION"
+debug_log "TEMP_FILE = $TEMP_FILE"
+debug_log "ZIP_FILE = $ZIP_FILE"
+debug_log "TODAY = $TODAY"
+debug_log "NOW = $NOW"
+
+if [ "$1" = "--help" ]; then
+    usage
+    exit 0
+fi
+
+if [ ! -f "$FILE_PATH" ]; then
+    echo "Error: File not found"
+    exit 1
+fi
+
+
+if [ ! -w "$FOLDER" ]; then 
+    echo "Error: Can't write to $FOLDER. Aborting."
+    exit 2
+fi
+
+mv "$FILE_PATH" "$TEMP_FILE"
+
+if [ ! -f "$TEMP_FILE" ]; then
+    echo "Error: Can't create $TEMP_FILE. Aborting."
+    exit 3
+fi
+
+debug_log "Temporary file ${TEMP_FILE} created successfully"
+
+zip -9 -j "$ZIP_FILE" "$TEMP_FILE"
+
+if [ ! -f "$ZIP_FILE" ]; then
+    echo "Error: Can't create $ZIP_FILE. Aborting."
+    exit 4
+fi
+
+debug_log "Zip file $ZIP_FILE created successfully"
+
+debug_log "Removing $TEMP_FILE"
+
+rm "$TEMP_FILE"
+
+if [ -f "$TEMP_FILE" ]; then
+    echo "Warning: Can't remove $TEM_FILE. You have to delete it manually."
+    exit 0
+fi
+
+debug_log "Done: $FILE_PATH -> $ZIP_FILE."
