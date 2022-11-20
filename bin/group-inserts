@@ -49,12 +49,12 @@ def is_insert(line):
 def get_insert_statement(line):
     search_result = regex.search(line)
     table_name = search_result.groups()[0]
-    return 'INSERT INTO `' + table_name + '` VALUES\n'
+    return 'INSERT INTO `' + table_name + '` VALUES'
 
 def get_values_statement(line):
     search_result = regex.search(line)
     header_len = search_result.end()
-    return line[header_len:]
+    return line[header_len:].strip(' \t\n\r;')
 
 def buffer_size():
     global insert_buffer, values_buffer
@@ -63,11 +63,11 @@ def buffer_size():
 def flush_buffer():
     global insert_buffer, values_buffer
     if insert_buffer:
-        print(insert_buffer, end='')
+        print(insert_buffer)
         insert_buffer = None
     if values_buffer:
-       print(values_buffer, end='')
-       values_buffer = None
+        print(values_buffer + ';')
+        values_buffer = None
 
 file = args.file
 
@@ -96,7 +96,7 @@ while True:
         if not values_buffer:
             values_buffer = ''
         else:
-            values_buffer = values_buffer + ','
+            values_buffer = values_buffer + '\n,'
 
         values_buffer = values_buffer + get_values_statement(line)
         state = State.CHECKING_BUFFER
