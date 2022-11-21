@@ -6,23 +6,27 @@ import re
 import os
 from enum import Enum
 
+
+
 parser = argparse.ArgumentParser(
-    prog='group-inserts',
-    description=
-    'This script refactors the output of mysqldump to group multiple inserts into one, up to a certain size limit.',
-    epilog='example: group-inserts mydump.sql --size 5 > grouped_dump.sql')
+      prog = 'group-inserts'
+    , description = 'This script refactors the output of mysqldump to group multiple inserts into one, up to a certain size limit.'
+    , epilog = 'example: group-inserts mydump.sql --size 5 > grouped_dump.sql'
+)
 parser.add_argument(
-    'file',
-    help='Input SQL dump file. When omitted will try reading stdin.',
-    type=argparse.FileType('r'),
-    default=sys.stdin,
-    nargs='?')
-parser.add_argument('-s',
-                    '--size',
-                    dest='size',
-                    help='Maximum INSERT block size in MB (default 1)',
-                    type=int,
-                    default=1)
+      'file'
+    , help='Input SQL dump file. When omitted will try reading stdin.'
+    , type=argparse.FileType('r')
+    , default=sys.stdin
+    , nargs='?'
+)
+parser.add_argument(
+    '-s','--size'
+    , dest='size'
+    , help='Maximum INSERT block size in MB (default 1)'
+    , type=int
+    , default=1
+)
 args = parser.parse_args()
 max_buffer = args.size * 1024 * 1024
 
@@ -33,34 +37,28 @@ class State(Enum):
     READING_VALUES = 3
     CHECKING_BUFFER = 4
 
-
 state = State.READING_LINE
 regex = re.compile("INSERT INTO `([A-Za-z0-9_]+)` VALUES ")
 line = None
 insert_buffer = None
 values_buffer = None
 
-
 def is_insert(line):
     return line[:11] == 'INSERT INTO'
-
 
 def get_insert_statement(line):
     search_result = regex.search(line)
     table_name = search_result.groups()[0]
     return 'INSERT INTO `' + table_name + '` VALUES'
 
-
 def get_values_statement(line):
     search_result = regex.search(line)
     header_len = search_result.end()
     return line[header_len:].strip(' \t\n\r;')
 
-
 def buffer_size():
     global insert_buffer, values_buffer
     return len(values_buffer) + len(insert_buffer)
-
 
 def flush_buffer():
     global insert_buffer, values_buffer
@@ -71,7 +69,6 @@ def flush_buffer():
         print(values_buffer + ';')
         values_buffer = None
 
-
 file = args.file
 
 while True:
@@ -79,7 +76,7 @@ while True:
     if state == State.READING_LINE:
         line = file.readline()
         if not line:
-            break
+            break;
         state = State.PROCESSING_LINE
 
     elif state == State.PROCESSING_LINE:
@@ -92,7 +89,7 @@ while True:
 
         if not insert_buffer:
             insert_buffer = get_insert_statement(line)
-
+           
         state = State.READING_VALUES
 
     elif state == State.READING_VALUES:
