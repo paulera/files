@@ -1,0 +1,186 @@
+#!/bin/bash
+
+set -e
+
+BACKUP_ROOT=~/backup
+SCRIPT=$(basename $0)
+
+usage() {
+        echo
+        echo "Usage: ${SCRIPT} [-l] [-r|-b <file>]"
+        echo "Backup or restore a file, using ${BACKUP_ROOT} as the backup storage,"
+        echo "considering the backup folder as a base location to reflect original paths"
+        echo
+        echo "Backup folder: ${BACKUP_ROOT} (requires editing this script to change)"
+        echo
+        echo "Options:"
+        echo "    --help         Displays this help and exit"
+        echo "    -s, --save     Creates a copy of <file> in ${BACKUP_ROOT}"
+        echo "    -r, --restore  Restores <file> from ${BACKUP_ROOT}. USE CAREFULLY."
+        echo "    -l, --list     List the files backed up, ommiting the backup path"
+        echo "                   and showing their presumed original location. This"
+        echo "                   option is safe to use"
+        echo
+        echo "The backup folder is is used as base location to reflect the original"
+        echo "location of the file, preserving the subdirectory structure."
+        echo
+        echo "Examples:"
+        echo
+        echo "${SCRIPT} --backup /etc/folder1/folder2/file.txt"
+        echo "    Will save a backup as ${BACKUP_ROOT}/etc/folder1/folder2/file.txt"
+        echo
+        echo "${SCRIPT} --restore ~/backup/etc/folder1/folder2/file.txt"
+        echo "    Will identify that the original location should be /etc/folder1/folder2"
+        echo "    and copy the specified file to that location"
+        echo
+}
+
+unknown() {
+    echo "Unknown option: ${1}"
+    usage
+    exit 1
+}
+
+# Asks for a Yes/No confirmation and prints out 1 (yes) or 0 (no)
+confirm() {
+    while :; do
+        read -p "[y/N] " choice
+        case "${choice}" in
+            y|yes|Y|YES)
+                echo "1"
+                return
+                ;;
+            n|no|N|NO)
+                echo "0"
+                return
+                ;;
+        esac
+    done
+}
+
+# Saves a backup of the provided file in the backup folder
+save() {
+
+    ORIGINAL_PATH=$(readlink -m $1)
+    ORIGINAL_DIR=$(dirname ${ORIGINAL_PATH})
+    ORIGINAL_FILE=$(basename ${ORIGINAL_PATH})
+    BACKUP_DIR=${BACKUP_ROOT}${ORIGINAL_DIR}
+    BACKUP_FILE=${BACKUP_DIR}/${ORIGINAL_FILE}
+
+    if [ -f "${BACKUP_FILE}" ]; then
+        echo -n "The file ${BACKUP_FILE} already exists! Overwrite? "
+        if [ "$(confirm)" == "0" ]; then
+            echo "Skipping ${ORIGINAL_PATH}"
+            return
+        fi
+    fi
+
+    if [ ! -d "${BACKUP_DIR}" ]; then
+        echo "Creating path ${BACKUP_DIR}"
+        mkdir -p ${BACKUP_DIR}
+    fi
+
+    echo "Backing up to ${BACKUP_DIR}"
+    cp ${ORIGINAL_PATH} ${BACKUP_DIR}
+
+}
+
+
+restore() {
+
+    set -x
+
+    BACKUP_FILE=$(readlink -m $1)
+    BACKUP_RELATIVE_PATH=$(realpath --relative-to=${BACKUP_ROOT} ${BACKUP_FILE})
+    DESTINATION_PATH="/${BACKUP_RELATIVE_PATH}"
+    DESTINATION_DIR=$(dirname ${DESTINATION_PATH})
+
+    exit 1
+
+    if [ -f "${DESTINATION_PATH}" ]; then
+        echo -n "The file ${DESTINATION_PATH} already exists! Overwrite? "
+        if [ "$(confirm)" == "0" ]; then
+            echo "Skipping ${DESTINATION_PATH}"
+            return
+        fi
+    fi
+
+    if [ ! -d "${DESTINATION_DIR}" ]; then
+        echo "Creating path ${DESTINATION_DIR}"
+        mkdir -p ${DESTINATION_DIR}
+    fi
+
+    echo "Restoring file ${DESTINATION_PATH}"
+    cp ${BACKUP_FILE} ${DESTINATION_PATH}
+
+}
+
+
+if [ -z "$1" ]; then
+        echo "Not enough parameters provided."
+        usage
+        exit 1
+fi
+
+# Decide the script behaviour from the params
+for (( i=1; i<=$#; i++ )); do
+    
+    case "${!i}" in
+
+        --help)
+            usage
+            exit 1
+            ;;
+        
+        -s | --save)
+            i=$(( i+1 ))
+            FILE="${!i}"
+            if [ -z "${FILE}" ]; then
+                echo "Missing parameter: <file> to save"
+                echo
+                exit 1
+            fi
+            if [ ! -f "${FILE}" ]; then
+                echo "File not found: ${FILE}"
+                echo
+                exit 1
+            fi
+            save ${FILE}
+            exit 0
+            ;;
+
+        -r | --restore)
+            i=$(( i+1 ))
+            FILE="${!i}"
+            if [ -z "${FILE}" ]; then
+                echo "Missing parameter: <file> to restore"
+                echo
+                exit 1
+            fi
+            if [ ! -f "${FILE}" ]; then
+                echo "File not found: ${FILE}"
+                echo
+                exit 1
+            fi
+            restore ${FILE}
+            exit 0
+            ;;
+
+        -l | --list)
+            if [ ! -d "${BACKUP_ROOT}" ]; then 
+                echo "Backup folder ${BACKUP_ROOT} not found."
+                exit 1
+            fi
+            cd ${BACKUP_ROOT}
+            find . -type f | sed 's/^\.//g'
+            exit 0
+            ;;
+
+        *)
+           unknown "${param}"
+           exit 1
+           ;;
+
+    esac
+done
+
