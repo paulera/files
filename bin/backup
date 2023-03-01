@@ -1,0 +1,14 @@
+#!/bin/bash
+
+BACKUP_LOCATION=~/backup
+
+if [ ! -d "${BACKUP_LOCATION}" ]; then
+  mkdir -p ${BACKUP_LOCATION}
+fi
+
+if [ ! -d "$1" ] && [ ! -f "$1" ]; then
+  echo "Invalid folder/file $1"
+  exit 1
+fi
+
+rsync --perms --copy-links --relative --recursive $(realpath --no-symlinks $1) $(realpath ${BACKUP_LOCATION})/
