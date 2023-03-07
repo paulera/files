@@ -1,9 +1,7 @@
 #!/bin/bash
-#desc: Returns current data as YYYY-MM-DD, or
-#      YYYYMMDD if "stamp" param provided
 
-if [ "$1" == "stamp" ]; then
-        date +"%Y-%m-%d" | sed s/-//g
-else
+if [ "$1" == "long" ]; then
         date +"%Y-%m-%d"
+else
+        date +"%Y-%m-%d" | sed s/-//g
 fi
