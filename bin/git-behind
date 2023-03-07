@@ -1,5 +1,25 @@
 #!/bin/bash
 
+usage() {
+    echo "Usage: $(basename $0) [reference branch]"
+    echo ""
+    echo "Compares the current git branch to the reference branch, showing"
+    echo "which commits behind or after (explanation below)"
+    echo
+    echo "Options:"
+    echo "    --help                Display this help"
+    echo "    [reference branch]    Default: main. The branch to compare to"
+    echo ""                         
+    echo "Understand the output:"
+    echo "    \"behind\" = commit in the reference branch which you don't have"
+    echo "    \"ahead\" = your commit, ahead the reference branch"
+}
+
+if [ "$1" == "--help" ]; then
+    usage
+    exit 0
+fi
+
 CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
 
 if [ "${CURRENT_BRANCH}" = "" ]; then
@@ -17,12 +37,12 @@ echo "Comparing the state of ${CURRENT_BRANCH} in relation to ${COMPARRE_BRANCH}
 
 echo ""
 
-echo "after   behind"
+echo "ahead   behind"
 git rev-list --left-right --count ${COMPARE_BRANCH}..${CURRENT_BRANCH}
 
 echo ""
 
 git rev-list --left-right --pretty=oneline ${COMPARE_BRANCH}..${CURRENT_BRANCH} \
     | sed "s/^>\(.*\)$/$(printf "\033[1;31m")behind > \1$(printf "\033[0m")/g" \
-    | sed "s/^<\(.*\)$/$(printf "\033[1;32m")after  < \1$(printf "\033[0m")/g"
+    | sed "s/^<\(.*\)$/$(printf "\033[1;32m")ahead  < \1$(printf "\033[0m")/g"
 
