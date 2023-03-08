@@ -6,7 +6,6 @@ ffa () {
 	    --exclude-dir="vendor" \
 	    --exclude-dir="node_modules" \
 	    -B2 -F2 \
-	    -i -n -H -a -R "$*" * &> /dev/stdout | \
-	    grep -v "^grep: .*$\|^Binary file \(standard input\) matches$"
+	    -i -n -H -a -R -I "$*" * &> /dev/stdout
 }
 
