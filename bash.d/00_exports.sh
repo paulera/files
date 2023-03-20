@@ -1,12 +1,12 @@
 if [[ "$OSTYPE" =~ "darwin" ]]; then
-	export FILES_ENV="mac"
+	export OS="mac"
 elif [ "$OSTYPE" == "cygwin" ]; then
-	export FILES_ENV="cygwin"
+	export OS="cygwin"
 else
-	export FILES_ENV="linux"
+	export OS="linux"
 fi
 
-if [ "$FILES_ENV" == "mac" ]; then
+if [ "$OS" == "mac" ]; then
 	if [ ! -d "/usr/local/opt/coreutils/libexec/gnubin/" ]; then
 		echo "For the FILES package to work on MacOS environments"
 		echo "you must install coreutils"
