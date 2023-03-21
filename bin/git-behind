@@ -46,7 +46,9 @@ echo ""
 
 read -r BEHIND AHEAD <<<$(git rev-list --left-right --count ${COMPARE_BRANCH}..${CURRENT_BRANCH})
 
-cecho reset "The local branch ${CURRENT_BRANCH} is\n"
+cecho reset "The local branch "
+cecho cyan "${CURRENT_BRANCH}"
+cecho reset " is\n"
 cecho reset "    behind by "
 cecho red "${BEHIND}"
 cecho red " commits\n"
