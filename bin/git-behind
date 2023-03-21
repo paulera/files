@@ -27,18 +27,29 @@ if [ "${CURRENT_BRANCH}" = "" ]; then
     exit 1
 fi
 
-COMPARE_BRANCH="main"
+MAIN_BRANCH_NAME=$(git config --get branch.master.merge | awk -F/ '{ print $3; }')
+if [ -z "$MAIN_BRANCH_NAME" ]; then
+    MAIN_BRANCH_NAME="main"
+fi
+COMPARE_BRANCH="origin/${MAIN_BRANCH_NAME}"
 
 if [ ! -z "$1" ]; then
     COMPARE_BRANCH="$1"
 fi
 
-echo "Comparing the state of ${CURRENT_BRANCH} in relation to ${COMPARRE_BRANCH}"
+cecho reset "Comparing the state of "
+cecho cyan "${CURRENT_BRANCH}"
+cecho reset " in relation to "
+cecho cyan "${COMPARE_BRANCH}\n"
 
 echo ""
 
-echo "ahead   behind"
-git rev-list --left-right --count ${COMPARE_BRANCH}..${CURRENT_BRANCH}
+read -r AHEAD BEHIND <<<$(git rev-list --left-right --count ${COMPARE_BRANCH}..${CURRENT_BRANCH})
+
+cecho red   "behind "
+cecho reset "${BEHIND}\n"
+cecho green "ahead  "
+cecho reset "${AHEAD}\n"
 
 echo ""
 
