@@ -44,16 +44,19 @@ cecho cyan "${COMPARE_BRANCH}\n"
 
 echo ""
 
-read -r AHEAD BEHIND <<<$(git rev-list --left-right --count ${COMPARE_BRANCH}..${CURRENT_BRANCH})
+read -r BEHIND AHEAD <<<$(git rev-list --left-right --count ${COMPARE_BRANCH}..${CURRENT_BRANCH})
 
-cecho red   "behind "
-cecho reset "${BEHIND}\n"
-cecho green "ahead  "
-cecho reset "${AHEAD}\n"
+cecho reset "The local branch ${CURRENT_BRANCH} is\n"
+cecho reset "    behind by "
+cecho red "${BEHIND}"
+cecho red " commits\n"
+cecho reset "    ahead  by "
+cecho green "${AHEAD}"
+cecho green " commits\n"
 
 echo ""
 
 git rev-list --left-right --pretty=oneline ${COMPARE_BRANCH}..${CURRENT_BRANCH} \
-    | sed "s/^>\(.*\)$/$(printf "\033[1;31m")behind > \1$(printf "\033[0m")/g" \
-    | sed "s/^<\(.*\)$/$(printf "\033[1;32m")ahead  < \1$(printf "\033[0m")/g"
+    | sed "s/^<\(.*\)$/$(printf "\033[1;31m")behind < \1$(printf "\033[0m")/g" \
+    | sed "s/^>\(.*\)$/$(printf "\033[1;32m")ahead  > \1$(printf "\033[0m")/g"
 
