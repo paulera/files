@@ -1,6 +1,5 @@
-#!/bin/bash
-
-# search history
+# Search history
+# Usage: h <search term>
 
 function h() {
 

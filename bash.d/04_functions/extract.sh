@@ -1,4 +1,5 @@
-# Extracting
+# Function for extracting files
+# It will call the right extraction command based on the file extension
 extract () {
   if [ -f $1 ] ; then
       case $1 in
@@ -13,10 +14,10 @@ extract () {
           *.zip)       unzip $1       ;;
           *.Z)         uncompress $1  ;;
           *.7z)        7z x $1        ;;
-          *)           echo "Nao sei extrair '$1'..." ;;
+          *)           echo "I don't know how to extract $1" ;;
       esac
   else
-      echo "'$1' nao eh um caminho de arquivo valido!"
+      echo "$1 Is not a valid filename"
   fi
 }
 

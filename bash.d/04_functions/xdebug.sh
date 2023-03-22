@@ -1,4 +1,4 @@
-function debug() {
+function xdebug() {
 
     if [ "$1" == "off" ]; then
         unset XDEBUG_CONFIG
@@ -16,7 +16,7 @@ function debug() {
         export XDEBUG_CONFIG="idekey=debugger";
         debug status
     else
-        echo "Usage: debug < on | off | status [raw] >"
+        echo "Usage: xdebug < on | off | status [raw] >"
         echo "Controls the environment variable to allow XDebug remote debug for CLI scripts"
         echo "    on           Turns on the debugger."
         echo "    off          Turns off the debugger."

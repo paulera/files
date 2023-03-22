@@ -1,74 +1,100 @@
 #!/bin/bash
+# The she-bang in the begin of this file is here only
+# to facilitate syntax highlighting for IDEs. This file
+# must be called sourece (using `source` or `.`) to allow
+# variables and functions to be present in the current
+# terminal session
 
-PERF=~/.files_profile
-DEBUG=0
+_LINE="---------------------------------------------"
+_USER_BASHD=~/bash.d
+_DEBUG_SOURCE=""
+
+# If the file ~/.files_debug is present, the function files_debug
+# will be implmented and will be available to this script, all
+# scripts in $FILESROOT/bash.d and ~/bash.d
 if [ -f ~/.files_debug ]; then
-    DEBUG=1
-fi
-
-# ----------------------------------------------------------------------
-# Edit your ~/.bashrc ou /etc/bah.bashrc file, and make it run this file
-# if [ -f ~/files/bash.d/run_bash ]; then . ~/files/bash.d/run_bash; fi
-# ----------------------------------------------------------------------
-if [ ! -z $BASH_SOURCE ]; then
-        #using bash 3 or higher
-        BASHDFOLDER=$(dirname $BASH_SOURCE)
+    FILES_DEBUG=1
+    files_debug() {
+        DEFAULT_COLOR="1;34"
+        COLOR=${DEFAULT_COLOR}
+        [ "$2" == "error" ] && COLOR="1;31"
+        [ "$2" == "success" ] && COLOR="1;32"
+        [ "$2" == "warning" ] && COLOR="1;33"
+        [ "$2" == "info" ] && COLOR="1;36"
+        
+        if [ "$FILES_DEBUG" = "1" ]; then
+            echo -en "\033[1;30m["$(date +"%T")" ${_DEBUG_SOURCE}]\033[0m "
+            echo -en "\033[${COLOR}m$1\033[0m"
+            echo
+        fi
+    }
 else
-        BASHDFOLDER=$(dirname $0)
-fi
-
-if [ -f $PERF ]; then
-    echo -n "" > $PERF
-    if [ $DEBUG = 1 ]; then
-        echo "'files' performance profiling is ON"
-        echo "saving results to ${PERF}"
-    fi
+    files_debug() {
+        return
+    }
+    FILES_DEBUG=0
 fi
 
 source_all_scripts() {
-    FOLDER=$1
+    FOLDER_BEFORE=$(pwd)
+    cd $1
+    read -a SCRIPTS <<<$(find . -name "*.sh" | sort)
+    files_debug "${#SCRIPTS[@]} initialization scripts found in $1" "info"
 
-    if [ $DEBUG = 1 ]; then
-        echo -e "\nProcessing files from ${FOLDER}\n"
-    fi
-
-    if [ -d $FOLDER ]; then
-        for i in $FOLDER/*.sh; do
-            if [ -r $i ]; then
-
-
-                if [ -f $PERF ]; then
-
-                    if [ $DEBUG = 1 ]; then
-                        echo -n "Running ${i} ... "
-                    fi
-
-                    TI=`date +%s%N`
-                    . $i
-                    TF=`date +%s%N`
-                    TOT=`expr \( $TF - $TI \) / 1000000`                    
-                    printf "%05d ${i}\n" "${TOT}" >> $PERF
-
-                    if [ $DEBUG = 1 ]; then
-                        echo "${TOT} ms"
-                    fi
-                
-                else
-
-                    if [ $DEBUG = 1 ]; then
-                        echo "Running ${i}"
-                    fi
-
-                    . $i
-                fi
-            fi
-        done
-        unset i
-    fi
+    for SCRIPT in "${SCRIPTS[@]}"; do
+        files_debug "Running script: "$(sed 's/^\.\///g' <<< ${SCRIPT})
+        _DEBUG_SOURCE=$(basename $SCRIPT)
+        . $SCRIPT
+        _DEBUG_SOURCE=$_THIS_SCRIPT
+    done
+    cd $FOLDER_BEFORE
 }
 
-source_all_scripts "${BASHDFOLDER}"
-if [ -d ~/bash.d ]; then
-    source_all_scripts ~/bash.d
+_DEBUG_SOURCE="starting..."
+
+files_debug "Checking script call method"
+files_debug "BASH_SOURCE=${BASH_SOURCE}" "info"
+files_debug "\"\$0\"=$0" "info"
+if [ "$0" = "$BASH_SOURCE" ]; then
+    _THIS_SCRIPT="$(basename $0)"
+    _DEBUG_SOURCE=${_THIS_SCRIPT}
+    files_debug "ERROR: Incorrect script use!" "error"
+    echo "Warning: misuse of ${BASH_SOURCE}!"
+    echo "This script must be sourced, not called as a script"
+else
+    _THIS_SCRIPT="$(basename $BASH_SOURCE)"
+    _DEBUG_SOURCE=${_THIS_SCRIPT}
+    files_debug "OK: Script is being sourced" "success"
 fi
+
+
+_ORIGINAL_FOLDER=$(pwd)
+files_debug "Initial folder: ${_ORIGINAL_FOLDER}"
+
+# Get scripts list
+FILESBASHD=$(dirname $(realpath -m $BASH_SOURCE))
+
+files_debug "Detecting main BASH.D folder"
+files_debug "\$FILESBASHD=${FILESBASHD}"
+if [ -f "${FILESBASHD}/run_bash" ]; then
+    files_debug $_LINE
+    source_all_scripts "${FILESBASHD}"
+else
+    files_debug "Error trying to find BASH.D folder" "error"
+fi
+
+if [ -d ${_USER_BASHD} ]; then
+    files_debug $_LINE
+    source_all_scripts "${_USER_BASHD}"
+else
+    files_debug "This user doesn't have a custom BASH.D at ${_USER_BASHD}" "warning"
+fi
+
+files_debug $_LINE
+
+# Set everything back to normal
+cd $_ORIGINAL_FOLDER
+unset _ORIGINAL_FOLDER
+unset _LINE
 unset -f source_all_scripts
+# the files_debug function is not unset, so it still produces output when calling stuff from bash.d directly

@@ -1,5 +1,7 @@
 #!/bin/bash
 
+# TODO: this script need more love and performance improvement
+
 #JOBS="if [ ! \$(jobs | wc -l) == 0 ]; then echo \[\e[01\;30m\]\\\[\$(jobs | wc -l)\\\]\\[\e[0m\]\ ; fi"
 #ERROR="if [ ! \$? = 0 ]; then echo \[\e[01\;31m\]!\[\e[0m\]; fi;"
 #S=""

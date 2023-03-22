@@ -1,3 +1,4 @@
+# TODO: this function needs more love
 psaux() {
 
     if [ "$1" == "--help" ]; then
