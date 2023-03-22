@@ -15,7 +15,7 @@
 #    cecho reset keep
 #       reseta a cor do terminal
 
-if [ "$FILES_ENV" == "mac" ]; then
+if [ "$OS" == "mac" ]; then
     ESC="\x1B"
 else
     ESC="\e"
