@@ -94,9 +94,9 @@ files_debug "\$FILESBASHD=${FILESBASHD}" "info"
 export FILESROOT="$(realpath -m ${FILESBASHD}/..)"
 files_debug "\$FILESROOT=${FILESROOT}" "info"
 
+files_debug $_LINE
 
 if [ -f "${FILESBASHD}/run_bash" ]; then
-    files_debug $_LINE
     source_all_scripts "${FILESBASHD}"
 else
     files_debug "Error trying to find BASH.D folder" "error"
@@ -109,7 +109,6 @@ fi
 files_debug $_LINE
 
 if [ -d ${_USER_BASHD} ]; then
-    files_debug $_LINE
     source_all_scripts "${_USER_BASHD}"
 else
     files_debug "This user doesn't have a custom BASH.D at ${_USER_BASHD}" "warning"
@@ -123,3 +122,5 @@ unset _ORIGINAL_FOLDER
 unset _LINE
 unset -f source_all_scripts
 # the files_debug function is not unset, so it still produces output when calling stuff from bash.d directly
+
+files_debug "run_bash concluded" "info"
