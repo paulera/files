@@ -71,17 +71,25 @@ fi
 _ORIGINAL_FOLDER=$(pwd)
 files_debug "Initial folder: ${_ORIGINAL_FOLDER}"
 
-# Get scripts list
-FILESBASHD=$(dirname $(realpath -m $BASH_SOURCE))
+files_debug "Detecting main folders"
+export FILESBASHD=$(dirname $(realpath -m $BASH_SOURCE))
+files_debug "\$FILESBASHD=${FILESBASHD}" "info"
+export FILESROOT="$(realpath -m ${FILESBASHD}/..)"
+files_debug "\$FILESROOT=${FILESROOT}" "info"
 
-files_debug "Detecting main BASH.D folder"
-files_debug "\$FILESBASHD=${FILESBASHD}"
+
 if [ -f "${FILESBASHD}/run_bash" ]; then
     files_debug $_LINE
     source_all_scripts "${FILESBASHD}"
 else
     files_debug "Error trying to find BASH.D folder" "error"
 fi
+
+if [ ! -f "${FILESROOT}/bash.d/run_bash" ]; then
+    files_debug "Error trying to find FILES root folder" "error"
+fi
+
+files_debug $_LINE
 
 if [ -d ${_USER_BASHD} ]; then
     files_debug $_LINE
