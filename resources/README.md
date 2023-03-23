@@ -1,11 +1,2 @@
-Files here are not used by FILES. They are just resources as
-configuration and etc. Dotfiles are not included here
-but they could. Or maybe I could refactor a better approach
-for storing configurations in general (terminal options,
-example files, dotfiles, etc).
-
-Some things that could be refactored and move in here:
-* dircolors
-* inputrc
-* jay.vim
-* vimrc
+Files used by various features of FILES (configuration files, templates, etc).
+Prefer to symlink these instead of copy, so they stat updated.
