@@ -8,6 +8,7 @@
 _LINE="---------------------------------------------"
 _USER_BASHD=~/bash.d
 _DEBUG_SOURCE=""
+PERF=~/.files_perf
 
 # If the file ~/.files_debug is present, the function files_debug
 # will be implmented and will be available to this script, all
@@ -35,6 +36,14 @@ else
     FILES_DEBUG=0
 fi
 
+if [ -f $PERF ]; then
+    echo -n "" > $PERF
+    if [ -f $PERF ]; then
+        echo "FILES performance profiling is ON"
+        echo "Saving results to ${PERF}"
+    fi  
+fi
+
 source_all_scripts() {
     FOLDER_BEFORE=$(pwd)
     cd $1
@@ -44,7 +53,15 @@ source_all_scripts() {
     for SCRIPT in "${SCRIPTS[@]}"; do
         files_debug "Running script: "$(sed 's/^\.\///g' <<< ${SCRIPT})
         _DEBUG_SOURCE=$(basename $SCRIPT)
+
+        [ -f $PERF ] && TI=`perl -MTime::HiRes=time -e 'printf "%f\n", time'`
         . $SCRIPT
+        if [ -f $PERF ]; then
+            TF=`perl -MTime::HiRes=time -e 'printf "%f\n", time'`
+            TOT=`echo "$TF - $TI" | bc`
+            echo "${TOT} ${SCRIPT}" >> $PERF
+        fi
+
         _DEBUG_SOURCE=$_THIS_SCRIPT
     done
     cd $FOLDER_BEFORE
