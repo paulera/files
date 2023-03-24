@@ -47,10 +47,20 @@ fi
 source_all_scripts() {
     FOLDER_BEFORE=$(pwd)
     cd $1
-    read -a SCRIPTS <<<$(find . -name "*.sh" | sort)
+
+    # Worked on macos but had bugs in WSL
+    # read -a SCRIPTS <<<$(find . -name "*.sh" | sort)
+
+    # Works in WSL, need to test other envs to confirm
+    readarray -d '' SCRIPTS < <(find . -name "*.sh" -print0 | sort)
+
     files_debug "${#SCRIPTS[@]} initialization scripts found in $1" "info"
 
     for SCRIPT in "${SCRIPTS[@]}"; do
+
+	# If not a file or link, skip
+	[ -f "${SCRIPT}" ] || [ -L "${SCRIPT}" ] || continue;
+
         files_debug "Running script: "$(sed 's/^\.\///g' <<< ${SCRIPT})
         _DEBUG_SOURCE=$(basename $SCRIPT)
 
