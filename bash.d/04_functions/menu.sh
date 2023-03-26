@@ -6,7 +6,7 @@
 
 menu() {
     
-    __usage() {
+    if [ "$1" == "--help" ]; then
         echo "Usage: menu <VARIABLE> <options list>"
         echo
         echo "Prints an interactive menu of options that can be navigated with"
@@ -19,17 +19,18 @@ menu() {
         echo "options list: List of quoted strings separated by space"
         echo
         echo "Example (checking if the user chose \"Apple\" from the menu:"
-        echo menu MYCHOICE \"Pear\" \"Grapes\" \"Apple\" \"Salad\"
+        echo "menu MYCHOICE \"Pear\" \"Grapes\" \"Apple\" \"Salad\""
+        echo
+        echo "echo \$MYCHOICE"
+        echo "echo \${MYCHOICE[0]}"
+        echo "echo \${MYCHOICE[1]}"
+        echo
         echo "if [ \"\$MYCHOICE\" == \"Apple\" ]; then ... ; fi"
         echo "if [ \"\${MYCHOICE[0]}\" == \"Apple\" ]; then ... ; fi"
         echo "if [ \"\${MYCHOICE[1]}\" == \"2\" ]; then ... ; fi"
         echo
         echo "(the script that declares this function must be sourced, not called)"
-        echo 
-    }
-
-    if [ "$1" == "--help" ]; then
-        __usage
+        echo
         return 0
     fi
 
@@ -83,7 +84,7 @@ menu() {
         __render_options $1
     }
 
-    # --- Script entry point -----------------
+    # --- Script main -----------------
 
     __VARIABLE_TO_WRITE=$1
     shift
