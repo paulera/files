@@ -58,16 +58,17 @@ menu() {
     __reset="\033[0m"
     __cyan="\033[1;36m"
     __render_options() {
-        _CURRENT_OPTION="" && [ ! -z "$1" ] && _CURRENT_OPTION="$1"
-        for (( i=0; i < $__OPTIONS_COUNT; i++ )); do
+        __CURRENT_OPTION="" && [ ! -z "$1" ] && __CURRENT_OPTION="$1"
+        for (( __i=0; __i < $__OPTIONS_COUNT; __i++ )); do
             echo -en "\033[K" # erase until end of line to fix glitches
-            if [ "$i" == "$_CURRENT_OPTION" ]; then
+            if [ "$__i" == "$__CURRENT_OPTION" ]; then
                 echo -ne ${__cyan}"> "
             else
                 echo -ne ${__reset}"  "
             fi
-            echo -e ${__OPTIONS[$i]}"${__reset}"
+            echo -e ${__OPTIONS[$__i]}"${__reset}"
         done
+        unset __i
     }
 
     # Move the cursor to the begin of the options list and re-render it
