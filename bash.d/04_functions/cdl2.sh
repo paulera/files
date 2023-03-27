@@ -4,10 +4,10 @@ cdl2() {
     LIST=()
     while read -r line; do
         LIST+=("$line");
-    done < <(dirs -p | tail -n +2 | uniq)
+    done < <(dirs -p | tail -n +2 | sort | uniq)
 
     echo
-    echo "Where to?"
+    echo "Locations you have been recently:"
     echo
 
     DEST_DIR=""
