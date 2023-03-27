@@ -1,10 +1,12 @@
 #!/bin/bash
 
-if [ "$1" != "dirs" ]; then
+PERF_FILE=~/.files_perf
+
+if [[ ! "$1" =~ dir.* ]]; then
     echo
     echo -e "FILES loading profiling ${cCyan}per file${c0}"
     echo
-    cat .files_perf | awk '
+    cat $PERF_FILE | awk '
     {
         arr[$2]+=$1
         tot+=$1
@@ -18,11 +20,11 @@ if [ "$1" != "dirs" ]; then
     ' | sort
 fi
 
-if [ "$1" != "files" ]; then
+if [[ ! "$1" =~ file.* ]]; then
     echo
     echo -e "FILES loading profiling ${cCyan}per script directory${c0}"
     echo
-    IFS=$'\n'; for perf in $(cat .files_perf); do dirname $perf; done | awk '
+    IFS=$'\n'; for perf in $(cat $PERF_FILE); do dirname $perf; done | awk '
     {
         arr[$2]+=$1
         tot+=$1
