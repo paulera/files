@@ -1,0 +1,39 @@
+#!/bin/bash
+
+if [ "$1" != "dirs" ]; then
+    echo
+    echo -e "FILES loading profiling ${cCyan}per file${c0}"
+    echo
+    cat .files_perf | awk '
+    {
+        arr[$2]+=$1
+        tot+=$1
+    }
+    END {
+        for (key in arr) {
+        percentage=100*arr[key]/tot
+        printf("%.5f\t%5.2f%%\t%s\n", arr[key], percentage, key)
+        }
+    }
+    ' | sort
+fi
+
+if [ "$1" != "files" ]; then
+    echo
+    echo -e "FILES loading profiling ${cCyan}per script directory${c0}"
+    echo
+    IFS=$'\n'; for perf in $(cat .files_perf); do dirname $perf; done | awk '
+    {
+        arr[$2]+=$1
+        tot+=$1
+    }
+    END {
+        for (key in arr) {
+        percentage=100*arr[key]/tot
+        printf("%.5f\t%5.2f%%\t%s\n", arr[key], percentage, key)
+        }
+    }
+    ' | sort
+fi
+
+echo
