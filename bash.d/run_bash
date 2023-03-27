@@ -48,7 +48,7 @@ fi
 
 run_script() {
     SCRIPT=$1
-    files_debug "Running script: "$(sed 's/^\.\///g' <<< ${SCRIPT})
+    files_debug "Running script: "${SCRIPT}
     _DEBUG_SOURCE=$(basename $SCRIPT)
     [ -f $PERF ] && TI=`perl -MTime::HiRes=time -e 'printf "%f\n", time'`
     . $SCRIPT
@@ -61,7 +61,7 @@ run_script() {
 }
 
 source_all_scripts() {
-    FOLDER_BEFORE=$(pwd)
+    FOLDER_BEFORE=$PWD
     cd $1
     
     if command -v readarray &> /dev/null; then
@@ -100,7 +100,7 @@ else
 fi
 
 
-_ORIGINAL_FOLDER=$(pwd)
+_ORIGINAL_FOLDER=$PWD
 files_debug "Initial folder: ${_ORIGINAL_FOLDER}"
 
 files_debug "Detecting main folders"

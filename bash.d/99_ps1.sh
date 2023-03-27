@@ -1,7 +1,5 @@
 #!/bin/bash
 
-# TODO: this script need more love and performance improvement
-
 #JOBS="if [ ! \$(jobs | wc -l) == 0 ]; then echo \[\e[01\;30m\]\\\[\$(jobs | wc -l)\\\]\\[\e[0m\]\ ; fi"
 #ERROR="if [ ! \$? = 0 ]; then echo \[\e[01\;31m\]!\[\e[0m\]; fi;"
 #S=""
@@ -14,46 +12,6 @@ __git_ps1_abbreviated() {
 
 newps() {
 
-	c() {
-	    echo -n "\\[\e[$1m\\]"
-	}
-
-	reset() {
-	    echo -n $(c '0')
-	}
-
-	red() {
-        echo -n $(c '1;31')$1$(c '0')
-	}
-
-    green() {
-        echo -n $(c '1;32')$1$(c '0')
-    }
-
-    blue() {
-        echo -n $(c '1;34')$1$(c '0')
-    }
-
-    cyan() {
-        echo -n $(c '1;36')$1$(c '0')
-    }
-    
-    yellow() {
-        echo -n $(c '1;33')$1$(c '0')
-    }
-
-    white() {
-        echo -n $(c '1;37')$1$(c '0')
-    }
-
-    purple() {
-        echo -n $(c '0;35')$1$(c '0')
-    }
-
-    purpleinv() {
-        echo -n $(c '45;30')$1$(c '0')
-    }
-
     ps1_tor() {
         [[ $LD_PRELOAD == *"torsocks/libtorsocks"* ]] && echo "[tor] "
     }
@@ -61,29 +19,29 @@ newps() {
     if [ "$(id -u)" -eq 0 ]; then
 		# root
 export PS1="\
-$(red \\u) \
-$(cyan @\\h) \
-$(blue \\w) \
+${cRed}\\u${c0} \
+${cCyan}@\\h${c0} \
+${cBlue}\\w${c0} \
 \\$ "
-	else
-		# common
+    else
+        # common
         if [ "$1" == "local" ]; then
 export PS1="\
-$(purple "\$(ps1_tor)")\
-$(white "\$(__git_ps1_abbreviated)")\
-$(blue \\w) \
+${cPurple}\$(ps1_tor)${c0}\
+${cWhite}\$(__git_ps1_abbreviated)${c0}\
+${cBlue}\\w${c0} \
 \\$ "
         else
 export PS1="\
-$(purple "\$(ps1_tor)")\
-$(green \\u) \
-$(cyan @\\h) \
-$(white "\$(__git_ps1_abbreviated)")\
-$(blue \\w) \
+${cPurple}\$(ps1_tor)${c0}\
+${cGreen}\\u${c0} \
+${cCyan}@\\h${c0} \
+${cWhite}\$(__git_ps1_abbreviated)${c0}\
+${cBlue}\\w${c0} \
 \\$ "
         fi
-		
-	fi
+
+    fi
 }
 newps
 
