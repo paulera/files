@@ -6,6 +6,8 @@ if [[ "$OSTYPE" =~ "darwin" ]]; then
 	export OS="mac"
 elif [ "$OSTYPE" == "cygwin" ]; then
 	export OS="cygwin"
+elif grep -qi microsoft /proc/version; then
+    export OS="wsl"
 else
 	export OS="linux"
 fi

@@ -8,12 +8,14 @@
 _LINE="---------------------------------------------"
 _USER_BASHD=~/bash.d
 _DEBUG_SOURCE=""
+_DEBUG_FILE=~/.files_debug
 PERF=~/.files_perf
 
 # If the file ~/.files_debug is present, the function files_debug
 # will be implmented and will be available to this script, all
 # scripts in $FILESROOT/bash.d and ~/bash.d
-if [ -f ~/.files_debug ]; then
+FILES_DEBUG=0
+if [ -f ${_DEBUG_FILE} ]; then
     FILES_DEBUG=1
     files_debug() {
         DEFAULT_COLOR="1;34"
@@ -44,13 +46,25 @@ if [ -f $PERF ]; then
     fi  
 fi
 
+run_script() {
+    SCRIPT=$1
+    files_debug "Running script: "$(sed 's/^\.\///g' <<< ${SCRIPT})
+    _DEBUG_SOURCE=$(basename $SCRIPT)
+    [ -f $PERF ] && TI=`perl -MTime::HiRes=time -e 'printf "%f\n", time'`
+    . $SCRIPT
+    if [ -f $PERF ]; then
+        TF=`perl -MTime::HiRes=time -e 'printf "%f\n", time'`
+        TOT=`echo "$TF - $TI" | bc`
+        echo "${TOT} $(realpath -m ${SCRIPT})" >> $PERF
+    fi
+    _DEBUG_SOURCE=$_THIS_SCRIPT
+}
+
 source_all_scripts() {
     FOLDER_BEFORE=$(pwd)
     cd $1
-
-
-    # Works in WSL, need to test other envs to confirm
-    if command -v redarray &> /dev/null; then
+    
+    if command -v readarray &> /dev/null; then
         # worked well in WSL
         readarray -d '' SCRIPTS < <(find . -name "*.sh" -print0 | sort)
     else
@@ -61,23 +75,10 @@ source_all_scripts() {
     files_debug "${#SCRIPTS[@]} initialization scripts found in $1" "info"
 
     for SCRIPT in "${SCRIPTS[@]}"; do
-
-	# If not a file or link, skip
-	[ -f "${SCRIPT}" ] || [ -L "${SCRIPT}" ] || continue;
-
-        files_debug "Running script: "$(sed 's/^\.\///g' <<< ${SCRIPT})
-        _DEBUG_SOURCE=$(basename $SCRIPT)
-
-        [ -f $PERF ] && TI=`perl -MTime::HiRes=time -e 'printf "%f\n", time'`
-        . $SCRIPT
-        if [ -f $PERF ]; then
-            TF=`perl -MTime::HiRes=time -e 'printf "%f\n", time'`
-            TOT=`echo "$TF - $TI" | bc`
-            echo "${TOT} ${SCRIPT}" >> $PERF
-        fi
-
-        _DEBUG_SOURCE=$_THIS_SCRIPT
+    	[ -f "${SCRIPT}" ] || [ -L "${SCRIPT}" ] || continue;
+    	run_script ${SCRIPT}
     done
+
     cd $FOLDER_BEFORE
 }
 
@@ -125,7 +126,7 @@ files_debug $_LINE
 if [ -d ${_USER_BASHD} ]; then
     source_all_scripts "${_USER_BASHD}"
 else
-    files_debug "This user doesn't have a custom BASH.D at ${_USER_BASHD}" "warning"
+    files_debug "This user doesn't have a custom BASH.D at ${_USER_BASHD}" "info"
 fi
 
 files_debug $_LINE
@@ -138,3 +139,4 @@ unset -f source_all_scripts
 # the files_debug function is not unset, so it still produces output when calling stuff from bash.d directly
 
 files_debug "run_bash concluded" "info"
+files_debug ""
