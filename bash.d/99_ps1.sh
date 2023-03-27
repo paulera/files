@@ -19,25 +19,25 @@ newps() {
     if [ "$(id -u)" -eq 0 ]; then
 		# root
 export PS1="\
-${cRed}\\u${c0} \
-${cCyan}@\\h${c0} \
-${cBlue}\\w${c0} \
+\[${cRed}\]\\u\[${c0}\] \
+\[${cCyan}\]@\\h\[${c0}\] \
+\[${cBlue}\]\\w\[${c0}\] \
 \\$ "
     else
         # common
         if [ "$1" == "local" ]; then
 export PS1="\
-${cPurple}\$(ps1_tor)${c0}\
-${cWhite}\$(__git_ps1_abbreviated)${c0}\
-${cBlue}\\w${c0} \
+\[${cPurple}\]\$(ps1_tor)\[${c0}\]\
+\[${cWhite}\]\$(__git_ps1_abbreviated)\[${c0}\]\
+\[${cBlue}\]\\w\[${c0}\] \
 \\$ "
         else
 export PS1="\
-${cPurple}\$(ps1_tor)${c0}\
-${cGreen}\\u${c0} \
-${cCyan}@\\h${c0} \
-${cWhite}\$(__git_ps1_abbreviated)${c0}\
-${cBlue}\\w${c0} \
+\[${cPurple}\]\$(ps1_tor)\[${c0}\]\
+\[${cGreen}\]\\u\[${c0}\] \
+\[${cCyan}\]@\\h\[${c0}\] \
+\[${cWhite}\]\$(__git_ps1_abbreviated)\[${c0}\]\
+\[${cBlue}\]\\w\[${c0}\] \
 \\$ "
         fi
 
