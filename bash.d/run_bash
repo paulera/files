@@ -26,9 +26,8 @@ if [ -f ${_DEBUG_FILE} ]; then
         [ "$2" == "info" ] && COLOR="1;36"
         
         if [ "$FILES_DEBUG" = "1" ]; then
-            echo -en "\033[1;30m["$(date +"%T")" ${_DEBUG_SOURCE}]\033[0m "
-            echo -en "\033[${COLOR}m$1\033[0m"
-            echo
+            printf "\033[1;30m["$(date +"%T")" ${_DEBUG_SOURCE}]\033[0m "
+            printf "\033[${COLOR}m$1\033[0m\n"
         fi
     }
 else
@@ -39,7 +38,7 @@ else
 fi
 
 if [ -f $PERF ]; then
-    echo -n "" > $PERF
+    printf "" > $PERF
     if [ -f $PERF ]; then
         echo "FILES performance profiling is ON"
         echo "Saving results to ${PERF}"
@@ -64,13 +63,7 @@ source_all_scripts() {
     FOLDER_BEFORE=$PWD
     cd $1
     
-    if command -v readarray &> /dev/null; then
-        # worked well in WSL
-        readarray -d '' SCRIPTS < <(find . -name "*.sh" -print0 | sort)
-    else
-        # Worked on macos but had bugs in WSL
-        read -a SCRIPTS <<<$(find . -name "*.sh" | sort)
-    fi
+    SCRIPTS=( $(find . -name "*.sh" | sort) )
 
     files_debug "${#SCRIPTS[@]} initialization scripts found in $1" "info"
 

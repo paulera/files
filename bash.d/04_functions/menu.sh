@@ -60,13 +60,13 @@ menu() {
     __render_options() {
         __CURRENT_OPTION="" && [ ! -z "$1" ] && __CURRENT_OPTION="$1"
         for (( __i=0; __i < $__OPTIONS_COUNT; __i++ )); do
-            echo -en "\033[K" # erase until end of line to fix glitches
+            printf "\033[K" # erase until end of line to fix glitches
             if [ "$__i" == "$__CURRENT_OPTION" ]; then
-                echo -ne ${__cyan}"> "
+                printf "${__cyan}> "
             else
-                echo -ne ${__reset}"  "
+                printf "${__reset}  "
             fi
-            echo -e ${__OPTIONS[$__i]}"${__reset}"
+            printf "${__OPTIONS[$__i]}${__reset}\n"
         done
         unset __i
     }
@@ -80,7 +80,7 @@ menu() {
         __SELECTED_VALUE=${__OPTIONS[$__SELECTED_INDEX]}
         
         # Moves the cursor $__OPTIONS_COUNT lines up, to re-render the menu
-        echo -en "\033[${__OPTIONS_COUNT}A"
+        printf "\033[${__OPTIONS_COUNT}A"
 
         __render_options $1
     }
