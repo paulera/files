@@ -63,11 +63,21 @@ source_all_scripts() {
     FOLDER_BEFORE=$PWD
     cd $1
     
-    # this was working, but removed temporarily to try a performance tweak: spam less process with $(...)
-    #SCRIPTS=( $(find . -name "*.sh" | sort) )
-
-    # This is being tested:
+    # Try to get the list of scripts with globstar expansion.
     SCRIPTS=( ./**/*.sh )
+    if [ ${#SCRIPTS[@]} -le 1 ]; then
+         
+        # Maybe it was missing enabling it?
+        shopt -s globstar &> /dev/null
+        
+        if [ $? -ge 1 ]; then
+            # Globstar expansion is just not available. Go with find and sort..
+            SCRIPTS=( $(find . -name "*.sh" | sort) )
+        else
+            SCRIPTS=( ./**/*.sh )
+        fi
+
+    fi
 
     files_debug "${#SCRIPTS[@]} initialization scripts found in $1" "info"
 
