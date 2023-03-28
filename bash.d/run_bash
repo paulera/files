@@ -48,13 +48,13 @@ fi
 run_script() {
     SCRIPT=$1
     files_debug "Running script: "${SCRIPT}
-    _DEBUG_SOURCE=$(basename $SCRIPT)
+    _DEBUG_SOURCE=${SCRIPT##*/}
     [ -f $PERF ] && TI=`perl -MTime::HiRes=time -e 'printf "%f\n", time'`
     . $SCRIPT
     if [ -f $PERF ]; then
         TF=`perl -MTime::HiRes=time -e 'printf "%f\n", time'`
         TOT=`echo "$TF - $TI" | bc`
-        echo "${TOT} $(realpath -m ${SCRIPT})" >> $PERF
+        echo "${TOT} ${PWD}${SCRIPT:1:-1}" >> $PERF
     fi
     _DEBUG_SOURCE=$_THIS_SCRIPT
 }
@@ -63,7 +63,11 @@ source_all_scripts() {
     FOLDER_BEFORE=$PWD
     cd $1
     
-    SCRIPTS=( $(find . -name "*.sh" | sort) )
+    # this was working, but removed temporarily to try a performance tweak: spam less process with $(...)
+    #SCRIPTS=( $(find . -name "*.sh" | sort) )
+
+    # This is being tested:
+    SCRIPTS=( ./**/*.sh )
 
     files_debug "${#SCRIPTS[@]} initialization scripts found in $1" "info"
 
@@ -81,13 +85,13 @@ files_debug "Checking script call method"
 files_debug "BASH_SOURCE=${BASH_SOURCE}" "info"
 files_debug "\"\$0\"=$0" "info"
 if [ "$0" = "$BASH_SOURCE" ]; then
-    _THIS_SCRIPT="$(basename $0)"
+    _THIS_SCRIPT="${0##*/}"
     _DEBUG_SOURCE=${_THIS_SCRIPT}
     files_debug "ERROR: Incorrect script use!" "error"
     echo "Warning: misuse of ${BASH_SOURCE}!"
     echo "This script must be sourced, not called as a script"
 else
-    _THIS_SCRIPT="$(basename $BASH_SOURCE)"
+    _THIS_SCRIPT="${BASH_SOURCE##*/}"
     _DEBUG_SOURCE=${_THIS_SCRIPT}
     files_debug "OK: Script is being sourced" "success"
 fi
