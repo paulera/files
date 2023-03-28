@@ -1,29 +1,30 @@
 #!/bin/bash
 
 if [ -z "$1" ] || [ "$1" == "--help" ]; then
-	echo "Usage: oldfy <filename>"
-	echo "Creates a .old copy of the file."
+	echo "Usage: oldfy <file|directory>"
+	echo "Creates a .old copy of the file or directory."
+	echo "If the \"old\" copy already exists, appends a number"
+	echo "e.g.: name.old.1 , name.old.2 , name.old.N"
 	echo
 	exit 1;
 fi
 
-if [ ! -f "$1" ]; then
-	echo $1 is not a valid file!
-	exit 1;
-fi
+old_base="$1.old"
+old="$old_base"
+i=0
 
-if [ -f "$1.old" ]; then
-	echo $1.old already exists!
-	exit 1;
-fi
+while [ -f "$old" ] || [ -d "$old" ]; do
+    (( i++ ))
+    old="$old_base.$i"
+done
 
 if [ -f "$1" ]; then
-	cp "$1" "$1.old"
+    printf "Creating file ${cCyan}$old${c0}\n"
+	cp "$1" "$old"
 	exit 0;
-fi
-
-if [ -d "$1" ]; then
-	cp -r "$1" "$1.old"
+elif [ -d "$1" ]; then
+    printf "Creating directory ${cCyan}$old${c0}\n"
+	cp -r "$1" "$old"
 	exit 0;
 fi
 
