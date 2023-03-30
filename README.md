@@ -1,4 +1,5 @@
 This is a bundle of scripts that I usually install in every linux machine I need to work. It makes a few personal tweaks in environment configuration, described below. Useful also when using third servers (as website hostings), where I use to have control only over my home folder.
+
 # Install #
 
 #### For a single account (no root privilege needed) ####
