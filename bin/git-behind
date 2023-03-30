@@ -37,24 +37,15 @@ if [ ! -z "$1" ]; then
     COMPARE_BRANCH="$1"
 fi
 
-cecho reset "Comparing the state of "
-cecho cyan "${CURRENT_BRANCH}"
-cecho reset " in relation to "
-cecho cyan "${COMPARE_BRANCH}\n"
+printf "Comparing the state of ${cCyan}${CURRENT_BRANCH}${c0} in relation to ${cCyan}${COMPARE_BRANCH}${c0}\n"
 
 echo ""
 
 read -r BEHIND AHEAD <<<$(git rev-list --left-right --count ${COMPARE_BRANCH}..${CURRENT_BRANCH})
 
-cecho reset "The local branch "
-cecho cyan "${CURRENT_BRANCH}"
-cecho reset " is\n"
-cecho reset "    behind by "
-cecho red "${BEHIND}"
-cecho red " commits\n"
-cecho reset "    ahead  by "
-cecho green "${AHEAD}"
-cecho green " commits\n"
+printf "The local branch ${cCyan}${CURRENT_BRANCH}${c0} is\n\n"
+printf "    behind by ${cRed}${BEHIND} commits${c0}\n"
+printf "    ahead  by ${cGreen}${AHEAD} commits${c0}\n"
 
 echo ""
 
