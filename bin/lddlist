@@ -1,0 +1,21 @@
+#!/bin/bash
+
+usage() {
+    echo "Usage: $(basename $0) <executable>"
+}
+ 
+if [ -z $1 ] || [ "$1" == "--help" ]; then
+    echo "Lists all dependencies of a binary from ldd -v"
+    usage
+    exit 1
+fi
+
+if [ ! -f "$1" ]; then
+    echo "$1" is not a valid file
+    echo
+    usage
+    echo
+    exit 1
+fi
+
+ldd -v $1 | grep "=> /" | sed 's/.*=> //g' | sort | uniq | sed 's/ ([0-9a-z]\+)$//g'
