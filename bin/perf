@@ -16,6 +16,7 @@ if [[ ! "$1" =~ dir.* ]]; then
         percentage=100*arr[key]/tot
         printf("%.5f\t%5.2f%%\t%s\n", arr[key], percentage, key)
         }
+        printf("total: %.5f", tot)
     }
     ' | sort
 fi
@@ -34,6 +35,7 @@ if [[ ! "$1" =~ file.* ]]; then
         percentage=100*arr[key]/tot
         printf("%.5f\t%5.2f%%\t%s\n", arr[key], percentage, key)
         }
+        printf("total: %.5f", tot)
     }
     ' | sort
 fi
