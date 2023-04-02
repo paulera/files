@@ -1,0 +1,13 @@
+#!/bin/bash
+
+# List all environment variables that look like colour definitions.
+
+for i in $(env |\
+    grep ^c.*m$ |\
+    grep -v ^c0); do
+
+    VAR=$(sed -E 's/([a-zA-Z_0-9]*)=.*/\1/g' <<<$i)
+    eval "echo -ne \${$VAR}"
+    echo -n $i
+    echo -e "${c0}"
+done
