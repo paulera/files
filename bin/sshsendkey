@@ -19,25 +19,25 @@ if [ -z $1 ]; then
 fi
 
 if [ ! -f $PUBKEY ]; then
-	cecho white "$PUBKEY"
-	cecho reset " not found!\n\n"
-	cecho yellow "You must generate your RSA public key!\n\n";
-	cecho reset;
+	printf ${cWhite}"$PUBKEY"${c0}
+	printf ${c0}" not found!\n\n"${c0}
+	printf ${cYellow}"You must generate your RSA public key!\n\n";${c0}
+	printf ${c0}
 	ssh-keygen -t rsa;
 fi
 
 if [ ! -f $PUBKEY ]; then
-	cecho red "$PUBKEY not found!\n";
+	printf ${cRed}"$PUBKEY not found!\n";${c0}
 	exit 1;
 fi
 
-cecho reset "Add your public key "
-cecho white $PUBKEY
-cecho reset " to the server's "
-cecho white "~/.ssh/authorized_keys"
-cecho reset " file? [y/"
-cecho white "N"
-cecho reset "] "
+printf ${c0}"Add your public key "${c0}
+printf ${cWhite}$PUBKEY${c0}
+printf ${c0}" to the server's "${c0}
+printf ${cWhite}"~/.ssh/authorized_keys"${c0}
+printf ${c0}" file? [y/"${c0}
+printf ${cWhite}"N"${c0}
+printf ${c0}"] "${c0}
 read -p "" -r
 echo
 if [[ $REPLY =~ ^[Y\|y]$ ]]; then

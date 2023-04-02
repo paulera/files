@@ -1,11 +1,11 @@
 #!/bin/bash
 
 echo -n -e "\nCOMMAND: "
-cecho yellow "$(basename $0) $*\n\n"
+printf ${cYellow}"$(basename $0) $*\n\n"${c0}
 
 for i in *; do
     if [ -d "$i/.git" ]; then
-        cecho cyan "-----> "$i
+        printf ${cCyan}"-----> "$i${c0}
         echo
         cd $i
         git $*

@@ -23,13 +23,13 @@ if [ ! -z $3 ]; then
 	MAX=$3
 fi
 
-cecho reset "Knocking "
-cecho cyan $HOST
-cecho reset " ports from "
-cecho cyan $MIN
-cecho reset " to "
-cecho cyan $MAX
-cecho reset " using telnet..."
+printf "${c0}Knocking ${c0}"
+printf ${cCyan}$HOST${c0}
+printf "${c0} ports from ${c0}"
+printf ${cCyan}$MIN${c0}
+printf "${c0} to ${c0}"
+printf ${cCyan}$MAX${c0}
+printf "${c0} using telnet...${c0}"
 echo
 
 for (( PORT=$MIN; PORT<=$MAX; PORT++ )); do

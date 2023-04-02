@@ -4,8 +4,8 @@ for i in $(ls $FILESROOT/soft/sqlmap/tamper/*.py | grep -v init); do
     FILENAME=$(basename $i);
     TAMPER=${FILENAME%.*} 
     echo
-    cecho blue ">>>>>> Using tamper "
-    cecho yellow $TAMPER
+    printf ${cBlue}">>>>>> Using tamper "${c0}
+    printf ${cYellow}$TAMPER${c0}
     echo
     echo sqlmap --tamper=$TAMPER $*
     echo

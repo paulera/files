@@ -32,33 +32,33 @@ while :; do
         RESULT=$(ping $TARGET -n 1)
     fi
 
-    cecho reset "\r$(now) "
+    echo -ne "\r${c0}$(now long) "
     if [[ $RESULT =~ ^.*could\ not\ find\ host.*$ ]]; then
         title $TARGET" (x_x)"
-        cecho red "CAN'T FIND HOST"
-        cecho reset " (x_x)\n"
+        echo -ne "${cRed}CAN'T FIND HOST${c0}"
+        echo -n " (x_x)\n"
     elif [[ $RESULT =~ ^.*Destination\ net\ unreachable.*$ ]]; then
-        cecho yellow "DESTINATION UNREACHABLE"
-        cecho reset " (O.o)\n"
+        echo -ne "${cYellow}DESTINATION UNREACHABLE${c0}"
+        echo -n " (O.o)\n"
     elif [[ $RESULT =~ .*\ from\ .* ]]; then
         
         IP=$(echo "$RESULT" | grep " from " | awk -F"from " '{ print $2 }' | awk -F: '{ print $1 }')
         SHORTTIME=$(echo "$RESULT" | grep time= | awk -Ftime= '{ print $2 }' | awk -Fms '{ print $1 }' | awk -F\. '{ print $1 }')
 
-        cecho white "[$IP] "
+        echo -ne "${cWhite}[$IP]${c0} "
 
         if [ $SHORTTIME -le $WOW ]; then
             title $TARGET"=WOW"
-            cecho cyan  "WOW!"
+            echo -ne "${cCyan}WOW!${c0}"
         elif [ $SHORTTIME -le $GOOD ]; then
             title $TARGET"=GOOD"
-            cecho green  "GOOD"
+            echo -ne  "${cGreen}GOOD${c0}"
         elif [ $SHORTTIME -le $AVER ]; then
             title $TARGET"=AVERAGE"
-            cecho yellow "AVER"
+            echo -ne "${cYellow}AVER${c0}"
         else
             title $TARGET"=SLOW"
-            cecho red    "SLOW"            
+            echo -ne "${cRed}SLOW${c0}"            
         fi
 
         #echo -n " | "
@@ -68,26 +68,26 @@ while :; do
         #echo -n " | "
         
         if [ $SHORTTIME -gt 0 ]; then
-            cecho cyan keep
+            echo -ne "${cCyan}"
             [ $SHORTTIME -le $WOW ] && bar $SHORTTIME || bar $WOW
         fi
 
         if [ $SHORTTIME -gt $WOW ]; then
-            cecho green keep
+            echo -ne "${cGreen}"
             [ $SHORTTIME -le $GOOD ] && bar $SHORTTIME || bar $GOOD
         fi
 
         if [ $SHORTTIME -gt $GOOD ]; then
-            cecho yellow keep
+            echo -ne "${cYellow}"
             [ $SHORTTIME -le $AVER ] && bar $(( $SHORTTIME - $GOOD )) || bar $AVER
         fi
 
         if [ $SHORTTIME -gt $AVER ]; then
-            cecho red keep
+            echo -ne "${cRed}"
             bar $(( $SHORTTIME - $AVER ))
         fi
 
-        cecho reset "\n"
+        echo -ne "${c0}\n"
         
         sleep 0.5s
 

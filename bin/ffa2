@@ -1,0 +1,47 @@
+#!/bin/bash
+
+# This is a much more elaborated version of the function ffa. Needs testing in 
+# other OSs
+
+if [ "$OS" == "mac" ]; then
+    # sed on mac requires a value for the -i param, which we will provide
+    # as empty
+    __EXT__=''
+fi
+
+IFS=$'\n'
+RESULT=( $(grep \
+    --color=always \
+    --exclude-dir=".git" \
+    --exclude-dir="vendor" \
+    --exclude-dir="node_modules" \
+    -B2 -F2 \
+    -i -n -H -a -R -I --null "$*" * | \
+    tr "\0" "|" | \
+    sed -E 's/^([^\|]*)\|([0-9]*)([:-])(.*)/\1 | \3\2\3 | \4/g'
+) )
+
+COUNT=1
+for i in "${!RESULT[@]}"; do
+    if [ "$i" == "0" ]; then
+        COUNT=$((COUNT+1))
+        FILE=$(echo ${RESULT[i]} | sed -E 's/^([^\|]*).*$/\1/g;s/ $//')
+        echo -ne "\n${cWhite}--- Occurence $COUNT: ${cGreen}${FILE}${cWhite} ---${c0}\n\n"
+    elif [[ "${RESULT[i]}" =~ ^--$ ]]; then
+        if [[ "${RESULT[i+1]}" =~ ^--$ ]]; then
+            continue
+        fi
+        
+        COUNT=$((COUNT+1))
+        FILE=$(echo ${RESULT[i+1]} | sed -E 's/^([^\|]*).*$/\1/g;s/ $//')
+        echo -ne "\n${cWhite}--- Occurence $COUNT: ${cGreen}${FILE}${cWhite} ---${c0}\n\n"
+    else
+        if [[ ! "${RESULT[i]}" =~ "${FILE} | :" ]]; then
+            echo -ne ${cDGray}
+        fi
+        echo -n "${RESULT[i]}"
+        echo -e "${c0}"
+    fi
+done
+echo
+    

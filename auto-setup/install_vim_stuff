@@ -8,15 +8,15 @@ FILE_THEME=jay.vim
 ensuredir () {
     if [ ! -d $1 ]; then
         mkdir -p $1;
-        cecho green "OK:"
+        echo -ne "${cGreen}OK:${c0}"
         echo " create dir $1"
     else
-        cecho green "OK:"
+        echo -ne "${cGreen}OK:${c0}"
         echo " dir $1 already exists. Skipped."
     fi
     if [ ! -d $1 ]; then
-        cecho red "ERROR:" 
-        echo " Can´t create $1";
+        echo -ne "${cRed}ERROR:${c0} "
+        echo " Can't create $1";
         echo
         return 0;
     fi
@@ -28,11 +28,11 @@ echo
 
 
 if [ "$(readlink ~/.vimrc)" == "$PATH_VIM_RESOURCES/vimrc" ]; then
-    cecho green "OK:"
+    echo -ne "${cGreen}OK:${c0} "
     echo " ~/.vimrc -> $PATH_VIM_RESOURCES/vimrc"
 else
     if [ -L ~/.vimrc ]; then
-        cecho yellow "WARNING:"
+        echo -ne "${cYellow}WARNING:${c0} "
         echo " ~/.vimrc already exists. Unlinking!";
     	unlink ~/.vimrc
     fi
@@ -40,10 +40,10 @@ else
     echo "Linking $PATH_VIM_RESOURCES/vimrc";
     ln -s $PATH_VIM_RESOURCES/vimrc ~/.vimrc;
     if [ -L ~/.vimrc ]; then
-        cecho green "OK:"
+        echo -ne "${cGreen}OK:${c0} "
         echo " ~/.vimrc -> $PATH_VIM_RESOURCES/vimrc"
     else
-        cecho red "ERROR:"
+        echo -ne "${cRed}ERROR:${c0} "
         echo "Could not create the link ~/.vimrc -> $PATH_VIM_RESOURCES/vimrc"
     fi
 fi
@@ -51,11 +51,11 @@ echo
 
 ensuredir ~/.vim/colors
 if [ "$(readlink ~/.vim/colors/$FILE_THEME)" == "$PATH_VIM_RESOURCES/$FILE_THEME" ]; then
-    cecho green "OK:"
+    echo -ne "${cGreen}OK:${c0} "
     echo " ~/.vim/colors/$FILE_THEME -> $PATH_VIM_RESOURCES/$FILE_THEME"
 else
     if [ -L ~/.vim/colors/$FILE_THEME ]; then
-        cecho yellow "WARNING:"
+        echo -ne "${cYellow}WARNING:${c0} "
         echo "~/.vim/colors/$FILE_THEME already exists. Unlinking!";
     	unlink ~/.vim/colors/$FILE_THEME
     fi
@@ -63,10 +63,10 @@ else
     echo "Linking $PATH_VIM_RESOURCES/$FILE_THEME";
     ln -s $PATH_VIM_RESOURCES/$FILE_THEME ~/.vim/colors/$FILE_THEME
     if [ -L ~/.vim/colors/$FILE_THEME ]; then
-        cecho green "OK:"
+        echo -ne "${cGreen}OK:${c0} "
         echo " ~/.vim/colors/$FILE_THEME -> $PATH_VIM_RESOURCES/$FILE_THEME"
     else
-        cecho red "ERROR:"
+        echo -ne "${cRed}ERROR:${c0} "
         echo "Could not create the link ~/.vimrc -> $PATH_VIM_RESOURCES/vimrc"
     fi
 fi

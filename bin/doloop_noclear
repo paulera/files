@@ -3,8 +3,7 @@
 INTERVAL="1"
 
 while :; do
-	cecho dgray "[$(now)]\n"
-	cecho reset
+	echo -e "${cDGray}[$(now long)]${c0}"
 	$*
 	echo
 	sleep $INTERVAL

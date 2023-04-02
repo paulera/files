@@ -8,14 +8,14 @@ while read -r l; do
 
         type=$(echo $l | sed 's/^ *//' | awk '{ print $1; }')
         if [ "$type" == "D" ]; then
-            cecho red keep;
+            echo -ne "${cRed}"
         #elif [ "$type" == "M" ]; then
-        #    cecho reset;
+        #    echo -ne "${c0}"
         elif [ "$type" == "??" ]; then
-            cecho green keep;
+            echo -ne ${cGreen}
         fi
 	    echo -e "    ${i}\t${l}"
-	    cecho reset
+	    echo -ne ${c0}
 	elif [ "$1" == "$i" ]; then
 		filename=$(echo $l | sed 's/^ *. *//')
 		git diff $filename

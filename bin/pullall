@@ -4,7 +4,7 @@ for i in */; do
     if [ -d $i".git" ]; then
         
         echo
-        cecho cyan "------> "$(readlink -m $i)
+        printf ${cCyan}"------> "$(readlink -m $i)${c0}
         echo
         echo
 
@@ -12,9 +12,9 @@ for i in */; do
 
         ORIGINAL_BRANCH=$(git branch --color=never | grep "^\*" | awk '{ print $2; }')
         while read branch; do
-            cecho reset "Updating branch "
-            cecho yellow $branch
-            cecho reset " ..."
+            printf ${c0}"Updating branch "${c0}
+            printf ${cYellow}$branch${c0}
+            printf ${c0}" ..."${c0}
             echo
             if [ "$branch" != "$ORIGINAL_BRANCH" ]; then
                 git checkout $branch
@@ -23,9 +23,9 @@ for i in */; do
             git pull &>/dev/stdout | grep -i --color "^\|error"
             echo
         done < <(git branch | sed 's/^[\* ] //g')
-        cecho reset "Switching back to "
-        cecho yellow $ORIGINAL_BRANCH
-        cecho reset " branch"
+        printf ${c0}"Switching back to "${c0}
+        printf ${cYellow}$ORIGINAL_BRANCH${c0}
+        printf ${c0}" branch"${c0}
         echo
         cd ..
     fi

@@ -6,7 +6,7 @@ CMD="$*"
 show() {
 	RESULT="$($1 2>&1)"
     clear
-    echo "$(date)"
+    echo "$(date long)"
     echo "$1"
     echo "------------------------------"
     echo "${RESULT}"

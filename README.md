@@ -85,7 +85,6 @@ A smart shortcut first looks for the folder inside home folder. If the user have
 
 #### SCRIPTS inside files/bin ####
 
-- **_cecho_**: colored echo - usage: **_cecho_ green "It's OK!\n"**
 - **_dirsize_**: list the size of everything, in the current dir
 - **_doloop_** <command>: Execute the command, repeatedly, with 1 second pause, clearing screen. Some bugs when using piped commands.
 - **_externalip_**: return the IP address seen by the web

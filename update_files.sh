@@ -3,9 +3,9 @@
 if [ "$(git status -s)" != "" ]; then
 
 	echo
-	cecho red "There are changes in your "
-	cecho yellow "files"
-	cecho red " folder!!!!!"
+	printf ${cRed}"There are changes in your "${c0}
+	printf ${cYellow}"files"${c0}
+	printf ${cRed}" folder!!!!!"${c0}
 	echo
 	echo
 	git status
@@ -28,10 +28,10 @@ fi
 cd "$(dirname "$0")"
 
 echo
-cecho cyan "git reset --hard HEAD\n"
+printf ${cCyan}"git reset --hard HEAD\n"${c0}
 git reset --hard HEAD
 echo
-cecho cyan "git pull\n"
+printf ${cCyan}"git pull\n"${c0}
 git pull
 echo
 

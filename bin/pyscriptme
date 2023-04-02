@@ -42,15 +42,15 @@ if [ ! -f $ARQ ]; then
 	vim -c ":read $FILESROOT/script_template.py | set syntax=python" +3 $ARQ
 	if [ -f $ARQ ]; then
 		echo ""
-		cecho green "Script saved as "
+		printf ${cGreen}"Script saved as "${c0}
 		echo $ARQ
 		echo ""
 		chmod +x $ARQ
 	else
 		echo ""
-		cecho red "Script"
+		printf ${cRed}"Script"${c0}
 		echo -n " $ARQ "
-		cecho red "not saved"
+		printf ${cRed}"not saved"${c0}
 		echo ""
 		echo ""
 	fi
