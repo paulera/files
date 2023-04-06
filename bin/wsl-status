@@ -1,0 +1,32 @@
+#!/bin/bash
+
+render_item() {
+    echo "$1"
+}
+
+mapfile -t LIST < <(wsl --list --verbose $*|\
+    tr -d '\0' |\
+    tr -d '\r' |\
+    sed -E 's/[ ]*\(Default\)$//g' |\
+    GREP_COLOR="1;32" grep --color=always "    Running    \|$" |\
+    GREP_COLOR="1;31" grep --color=always "    Stopped    \|$" |\
+    GREP_COLOR="1;33" grep --color=always "    Converting    \|$" )
+
+
+# echo -e "\n${LIST[0]}"
+# printf -- '-%.0s' {1..20}
+# LINE_LEN=${#LIST[0]}
+# eval "printf -- '-%.0s' {1..$LINE_LEN}"
+
+echo -e "\n${cDGray}Default:${c0}\n"
+echo "${LIST[1]}" | sed 's/^\*/ /g'
+echo -e "\n${cDGray}Other distros:${c0}\n"
+
+for (( i = 2; i < ${#LIST[@]}; i++ )); do
+    render_item "${LIST[$i]}"
+done
+
+echo
+
+
+

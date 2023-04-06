@@ -1,0 +1,3 @@
+#!/bin/bash
+
+wsl-list | head -n 1
