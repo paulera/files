@@ -165,7 +165,6 @@ menu() {
     unset __usage
     # command to help writing all the "unset"s above:
     # for i in $(cat menu.sh | sed 's/^[\t ]*//g' | sed -e 's/ .*//g' | sed -e 's/[^ a-zA-Z_].*$//g' | grep __ | sort | uniq); do echo "unset $i"; done
-
-
-
 }
+
+export -f menu

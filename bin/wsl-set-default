@@ -1,0 +1,19 @@
+#!/bin/bash
+
+show_default_distro() {
+    DEFAULT_DISTRO=$(wsl --list -v | tr -d '\0' | tr -d '\r' | grep "^\*" | awk '{ print $2; }')
+    echo -e "The default WSL distro is ${cGreen}${DEFAULT_DISTRO}${c0}"
+}
+
+WSL_LIST=( "$(wsl --list | tr -d '\0' | tr -d '\r' | tail -n +2 | sed -E 's/[ ]*\(Default\)$//g')" )
+
+echo
+show_default_distro 
+echo
+echo "Select a new one:"
+echo
+menu DISTRO ${WSL_LIST[@]}
+wsl --set-default ${DISTRO}
+echo
+show_default_distro 
+echo
