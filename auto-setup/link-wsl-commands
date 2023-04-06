@@ -1,0 +1,31 @@
+#!/bin/bash
+
+WSLCONFIG_SOURCE="/mnt/c/Windows/System32/wslconfig.exe"
+WSLCONFIG_LINK="~/bin/wslconfig"
+WSL_SOURCE="/mnt/c/Windows/System32/wsl.exe"
+WSL_LINK="~/bin/wsl"
+
+# Usage: makelink <target> <link name>
+makelink() {
+    if [ -L "$2" ]; then
+        echo -e "${cYellow}WARNING${c0}: link $2 already exists! Unlinking ..."
+        unlink $2
+        echo 
+    fi
+
+    echo -ne "Creating link ${cCyan}$2${c0} -> ${cGreen}$1${c0} ... "
+    ln -s $1 $2
+
+    if [ -L "$2" ]; then
+        echo -e "${cGreen}OK${c0}"
+    else
+        echo -e "${cRed}ERROR${c0}"
+    fi
+
+    echo
+}
+
+echo
+makelink /mnt/c/Windows/System32/wsl.exe ~/bin/wsl
+makelink /mnt/c/Windows/System32/wslconfig.exe ~/bin/wslconfig
+
