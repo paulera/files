@@ -14,7 +14,7 @@ if ! command -v "powershell" &> /dev/null; then
     exit 1
 fi
 
-DISTRO_AND_FOLDERS=$(powershell -Command 'foreach ($item in (Get-ChildItem -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Lxss")) { $item.GetValue("DistributionName") + "|" + $item.GetValue("BasePath") }' | grep -i -v "^|" | sed 's/\\\\?\\//')
+DISTRO_AND_FOLDERS=$(powershell -Command 'foreach ($item in (Get-ChildItem -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Lxss")) { $item.GetValue("DistributionName") + "|" + $item.GetValue("BasePath") }' | grep -i -v "^|" | sed 's/\\\\?\\//' | tr -d '\r' )
 
 if [ -z "$1" ]; then
     echo "${DISTRO_AND_FOLDERS[@]}"
