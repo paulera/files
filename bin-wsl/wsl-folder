@@ -1,12 +1,17 @@
 #!/bin/bash
 
 if [ "$1" == "--help" ]; then
-    echo "Usage: wsl-folder [distro name]"
+    echo "Usage: wsl-folder [this|distro name]"
     echo "No params: list all ditributions and their path, separated by |"
-    echo "[distro name]: provide the windows-like path where a distro is installed"
+    echo "wsl-folder [distro name]: provide the windows-like path where a distro is installed"
     echo "               to get the linux path, use the command ${cYellow}wspath${c0}"
+    echo "wsl-folder this: provide the path of the current distro based on \$WSL_DISTRO_NAME"
     exit 0
 fi
+
+DISTRO_NAME=""
+[ ! -z "$1" ] && DISTRO_NAME="$1"
+[ "$1" == "this" ] && DISTRO_NAME=${WSL_DISTRO_NAME/$'\n'/}
 
 if ! command -v "powershell" &> /dev/null; then
     echo -e "${cYellow}powershell${c0} is not available in the PATH."
@@ -16,8 +21,8 @@ fi
 
 DISTRO_AND_FOLDERS=$(powershell -Command 'foreach ($item in (Get-ChildItem -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Lxss")) { $item.GetValue("DistributionName") + "|" + $item.GetValue("BasePath") }' | grep -i -v "^|" | sed 's/\\\\?\\//' | tr -d '\r' )
 
-if [ -z "$1" ]; then
+if [ -z "$DISTRO_NAME" ]; then
     echo "${DISTRO_AND_FOLDERS[@]}"
 else
-    echo "${DISTRO_AND_FOLDERS[@]}" | grep "^$1|" | sed "s/$1|//g"
+    echo "${DISTRO_AND_FOLDERS[@]}" | grep "^$DISTRO_NAME|" | sed "s/$DISTRO_NAME|//g"
 fi
