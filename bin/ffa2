@@ -11,7 +11,7 @@ fi
 
 IFS=$'\n'
 RESULT=( $(grep \
-    --color=always \
+    --color=never \
     --exclude-dir=".git" \
     --exclude-dir="vendor" \
     --exclude-dir="node_modules" \
@@ -27,7 +27,7 @@ for i in "${!RESULT[@]}"; do
     if [ "$i" == "0" ]; then
         COUNT=$((COUNT+1))
         FILE=$(echo ${RESULT[i]} | sed -E 's/^([^\|]*).*$/\1/g;s/ $//')
-        echo -ne "\n${cWhite}--- Occurence $COUNT: ${cGreen}${FILE}${cWhite} ---${c0}\n\n"
+        echo -ne "\n${cPurple}--- Occurence $COUNT: ${cGreen}${FILE}${cPurple} ---${c0}\n\n"
         echo ${FILE} >> /tmp/files_that
     elif [[ "${RESULT[i]}" =~ ^--$ ]]; then
         if [[ "${RESULT[i+1]}" =~ ^--$ ]]; then
@@ -36,9 +36,17 @@ for i in "${!RESULT[@]}"; do
         
         COUNT=$((COUNT+1))
         FILE=$(echo ${RESULT[i+1]} | sed -E 's/^([^\|]*).*$/\1/g;s/ $//')
-        echo -ne "\n${cWhite}--- Occurence $COUNT: ${cGreen}${FILE}${cWhite} ---${c0}\n\n"
+        echo -ne "\n${cPurple}--- Occurence $COUNT: ${cGreen}${FILE}${cPurple} ---${c0}\n\n"
         echo ${FILE} >> /tmp/files_that
     else
+        #TODO: implement this example to colorize lines
+        #if [[ $line =~ $num$nonum$num$nonum$num$nonum$num ]] ; then
+        #    level=${BASH_REMATCH[1]}
+        #    grid=${BASH_REMATCH[2]}
+        #    boxes=${BASH_REMATCH[3]}
+        #    tasks=${BASH_REMATCH[4]}
+        #    echo "Level $level, grid $grid, boxes $boxes, tasks $tasks."
+        #fi
         if [[ ! "${RESULT[i]}" =~ "${FILE} | :" ]]; then
             echo -ne ${cDGray}
         fi

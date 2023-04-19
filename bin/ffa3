@@ -1,0 +1,72 @@
+#!/bin/bash
+
+# This is a much more elaborated version of the function ffa. Needs testing in 
+# other OSs
+
+if [ "$OS" == "mac" ]; then
+    # sed on mac requires a value for the -i param, which we will provide
+    # as empty
+    __EXT__=''
+fi
+
+IFS=$'\n'
+RESULT=( $(grep \
+    --color=never \
+    --exclude-dir=".git" \
+    --exclude-dir="vendor" \
+    --exclude-dir="node_modules" \
+    -B2 -F2 \
+    -i -n -H -a -R -I --null "$*" * | \
+    tr "\0" "|" #| \
+    # sed -E 's/^([^\|]*)\|([0-9]*)([:-])(.*)/\1 | \3\2\3 | \4/g'
+) )
+
+COUNT=0
+echo "" > /tmp/files_that
+for i in "${!RESULT[@]}"; do
+
+    # TODO: DRY principle here please
+
+    if [ "$i" == "0" ]; then
+        COUNT=$((COUNT+1))
+        FILE=$(echo ${RESULT[i]} | sed 's/|.*$//')
+        FILE_LEN=${#FILE}
+        echo -ne "\n${cCyan}${FILE}${cPurple} ${cPurple}(occurence $COUNT)${c0}\n\n"
+        echo ${FILE} >> /tmp/files_that
+    elif [[ "${RESULT[i]}" =~ ^--$ ]]; then
+        if [[ "${RESULT[i+1]}" =~ ^--$ ]]; then
+            continue
+        fi
+        
+        COUNT=$((COUNT+1))
+        FILE=$(echo ${RESULT[i+1]} | sed 's/|.*$//')
+        FILE_LEN=${#FILE}
+        echo -ne "\n${cCyan}--> ${FILE}${cPurple} ${cDGray}(occurence $COUNT)${c0}\n\n"
+        echo ${FILE} >> /tmp/files_that
+    fi
+        CONTENT="${RESULT[i]:$((FILE_LEN+1))}"
+        num='([0-9]+)'
+        if [[ "${CONTENT}" =~ $num([:-])(.*)$ ]]; then
+            LINE_NUM=${BASH_REMATCH[1]}
+            FOUND=0 && [ "${BASH_REMATCH[2]}" == ":" ] && FOUND=1
+            TEXT=${BASH_REMATCH[3]}
+            #echo -n "${RESULT[i]:$((FILE_LEN+1))}"
+            
+            if [ "$FOUND" == "0" ]; then
+                echo -ne ${cDGray}
+                printf "%5d : " $LINE_NUM
+                echo -e "$TEXT${c0}"
+            else
+                printf "${cCyan}%5d | ${c0}" $LINE_NUM
+                echo -n "$TEXT" | GREP_COLOR="1;31" grep --color=always "$*"
+                echo -en "${c0}"
+            fi
+            
+        else
+            # for regex matching errors. should not happen.
+            echo -e "error ! ${cRed}${CONTENT}${c0}"
+        fi
+    
+done
+echo
+    
