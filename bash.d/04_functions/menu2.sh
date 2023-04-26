@@ -147,6 +147,7 @@ menu2() {
             __OPTIONS+=("$line")
         fi
     done <<<$@
+
     __OPTIONS_COUNT=${#__OPTIONS[@]}
     if [ "$START" == "bottom" ]; then
         __STATE="last" # menu selection state: first, last, middle
@@ -254,6 +255,3 @@ h ()
 }
 
 export -f menu2
-
-cd ~/.files/bash.d
-menu2 -b RESULT $(ls -1)
