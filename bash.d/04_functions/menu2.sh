@@ -112,6 +112,28 @@ menu2() {
 
     # --- Script main -----------------
 
+    START="top"
+    for (( i=1; i<=$#; i++ )); do
+        case "${!i}" in
+            --help)
+            shift
+            # TODO: implement usage()
+            ;;
+
+            -t|--top)
+            # top is the default option
+            shift
+            ;;
+
+            -b|--bottom)
+            # bottom
+            START="bottom"
+            shift
+            break
+            ;;
+        esac
+    done
+
     __color_unselected="\033[49m"
     __color_selected="$(tput setab 17)"
 
@@ -126,11 +148,16 @@ menu2() {
         fi
     done <<<$@
     __OPTIONS_COUNT=${#__OPTIONS[@]}
-    __SELECTED_INDEX=$(( $__OPTIONS_COUNT - 1 )) # last
-    __SELECTED_VALUE=${__OPTIONS[$__SELECTED_INDEX]}
-    __STATE="last" # menu selection state: first, last, middle
+    if [ "$START" == "bottom" ]; then
+        __STATE="last" # menu selection state: first, last, middle
+        __SELECTED_INDEX=$(( $__OPTIONS_COUNT - 1 )) # last
+    else
+        __STATE="first" # menu selection state: first, last, middle
+        __SELECTED_INDEX=0 # first
+    fi
+    
     __render_all_options
-    __set_selection $(( $__OPTIONS_COUNT - 1 ))
+    __set_selection ${__SELECTED_INDEX} 
 
     while true; do
         
@@ -227,3 +254,6 @@ h ()
 }
 
 export -f menu2
+
+cd ~/.files/bash.d
+menu2 -b RESULT $(ls -1)
