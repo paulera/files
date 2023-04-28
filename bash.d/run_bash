@@ -60,15 +60,15 @@ run_script() {
 }
 
 source_all_scripts() {
-    FOLDER_BEFORE=$PWD
-    cd $1
 
+    DIR=$1
+    
     # Less performing but more resilient scripts list gathering
     # SCRIPTS=( $(find . -name "*.sh" | sort) )
 
     # the repetition below is to not rely on shopt globstar, which might not
     # be available in some bash implementation (e.g. macos)
-    SCRIPTS=( *.sh */*.sh */*/*.sh */*/*/*.sh )
+    SCRIPTS=( $DIR/*.sh $DIR/*/*.sh $DIR/*/*/*.sh $DIR/*/*/*/*.sh )
 
     files_debug "${#SCRIPTS[@]} initialization scripts found in $1" "info"
 
@@ -77,7 +77,6 @@ source_all_scripts() {
     	run_script ${SCRIPT}
     done
 
-    cd $FOLDER_BEFORE
 }
 
 _DEBUG_SOURCE="starting..."
@@ -130,7 +129,6 @@ fi
 files_debug $_LINE
 
 # Set everything back to normal
-cd $_ORIGINAL_FOLDER
 unset _ORIGINAL_FOLDER
 unset _LINE
 unset -f source_all_scripts
