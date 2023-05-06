@@ -1,0 +1,18 @@
+#!/bin/bash
+
+echo "Applying default git options"
+
+echo
+
+echo "Setting default line ending to LF"
+echo -e "${cCyan}git config --global core.eol lf${c0}"
+git config --global core.eol lf
+
+echo
+
+echo "Avoid conversion of line endings to CRLF"
+echo -e "${cCyan}git config --global core.autocrlf false${c0}"
+git config --global core.autocrlf false
+
+echo
+
