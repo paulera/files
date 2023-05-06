@@ -1,16 +1,13 @@
 #!/bin/bash
 
-WSLCONFIG_SOURCE="/mnt/c/Windows/System32/wslconfig.exe"
-WSLCONFIG_LINK="~/bin/wslconfig"
-WSL_SOURCE="/mnt/c/Windows/System32/wsl.exe"
-WSL_LINK="~/bin/wsl"
+DESTINATION_FOLDER=~/bin
 
 # Usage: makelink <target> <link name>
 makelink() {
     if [ -L "$2" ]; then
         echo -e "${cYellow}WARNING${c0}: link $2 already exists! Unlinking ..."
         unlink $2
-        echo 
+        echo
     fi
 
     echo -ne "Creating link ${cCyan}$2${c0} -> ${cGreen}$1${c0} ... "
@@ -25,7 +22,20 @@ makelink() {
     echo
 }
 
+if [ ! -d ${DESTINATION_FOLDER} ]; then
+    echo -ne "Creating folder ${cCyan}${DESTINATION_FOLDER}${c0} ... "
+    mkdir ${DESTINATION_FOLDER}
+
+    if [ -d ${DESTINATION_FOLDER} ]; then
+        echo -e "${cGreen}OK${c0}"
+    else
+        echo -e "${cRed}ERROR${c0}"
+        echo -e "Cannot proceed linking files without ${cCyan}${DESTINATION_FOLDER}${c0}. Aborting."
+        exit 1
+    fi
+fi
+
 echo
 makelink /mnt/c/Windows/System32/wsl.exe ~/bin/wsl
 makelink /mnt/c/Windows/System32/wslconfig.exe ~/bin/wslconfig
-
+makelink /mnt/c/Windows/System32/clip.exe ~/bin/clip
