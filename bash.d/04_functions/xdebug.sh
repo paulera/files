@@ -27,3 +27,4 @@ function xdebug() {
         echo ""
     fi
 }
+export -f xdebug

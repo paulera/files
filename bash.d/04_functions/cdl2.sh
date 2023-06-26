@@ -14,4 +14,4 @@ cdl2() {
         echo
     fi
 }
-
+export -f cdl2

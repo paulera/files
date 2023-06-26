@@ -11,4 +11,4 @@ cc() {
 
 	awk "{ print \$$1; }"
 }
-
+export -f cc

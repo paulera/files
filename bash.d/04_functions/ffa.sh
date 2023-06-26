@@ -24,3 +24,4 @@ ffa () {
         # leaves only the filename
         sed -r -i 's/:.*$//g' /tmp/files_that
 }
+export -f ffa

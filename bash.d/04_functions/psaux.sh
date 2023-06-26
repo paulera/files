@@ -51,8 +51,5 @@ psaux() {
     fi
 
     export LAST_PSAUX_RESULT="$result"
-
-
-
-
 }
+export -f psaux

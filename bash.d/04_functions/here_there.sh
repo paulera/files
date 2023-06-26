@@ -22,3 +22,6 @@ there() {
         echo "No location to go. Try copying a path to the clipboard or running the command here somewhere."
     fi
 }
+
+export -f here
+export -f there

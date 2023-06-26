@@ -31,3 +31,6 @@ cdl() {
     fi
 }
 
+export -f cd
+export -f cdp
+export -f cdl

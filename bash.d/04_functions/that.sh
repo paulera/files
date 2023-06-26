@@ -23,3 +23,4 @@ function that() {
     sed -n "${LINE}p" /tmp/files_that;
 
 }
+export -f that

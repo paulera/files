@@ -16,4 +16,4 @@ function h() {
        echo
     fi
 }
-
+export -f h

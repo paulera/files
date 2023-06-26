@@ -13,6 +13,7 @@ if [ "$OS" = "cygwin" ]; then
 
         cd $(cygpath "$*");
     }
+    export -f cdc
 else
     files_debug "Not an CYGWIN environment"
 fi

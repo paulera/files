@@ -20,4 +20,4 @@ extract () {
       echo "$1 Is not a valid filename"
   fi
 }
-
+export -f extract
