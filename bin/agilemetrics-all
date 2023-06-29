@@ -1,0 +1,88 @@
+#!/bin/bash
+
+# This script will process all yml files in the current folder
+# and run them with jira-agile-metrics. Results will be stored
+# in subfolders following the structure ./filename/YYYYMMDD.
+
+if [ -z "${JIRA_USER}" ]; then
+    echo "You must export variables for your authentication"
+    echo "export JIRA_USER=you@email.com"
+    echo "export JIRA_TOKEN=mnv00ijwvf0...93h2g7dbf838f98"
+    echo ""
+    exit 1
+fi
+
+TODAY=$(date +"%Y-%m-%d" | sed s/-//g)
+
+for ymlfile in *.yml; do
+    
+    basename=$(basename "$ymlfile")
+    name=${basename%.*}
+    destfolder="./${name}/$TODAY"
+
+    logfolder="./logs"
+    if [ ! -d "${logfolder}" ]; then
+        mkdir -p "${logfolder}"
+    fi
+    logfile="${logfolder}/${name}.log"
+    NOW=$(date +"%T" | sed s/://g)
+
+    echo "Processing ${ymlfile}"
+    echo "Processing ${ymlfile} at ${TODAY}_${NOW}" >> "${logfile}"
+
+    if [ -d "${destfolder}" ]; then
+        echo "The folder ${destfolder} already exists. Contents will be overriden."
+        echo "Removing ${destfolder}"
+        echo "Removing ${destfolder}" >> "${logfile}"
+        rm -r "${destfolder}"
+    fi
+    
+    echo "Creating ${destfolder}"
+    echo "Creating ${destfolder}" >> "${logfile}"
+    mkdir -p "${destfolder}"
+
+    echo "Running jira-agile-metrics" >> "${logfile}"
+
+    jira-agile-metrics \
+        --username $JIRA_USER \
+        --password $JIRA_TOKEN \
+        -o "${destfolder}" \
+        "${ymlfile}" & >> "${logfile}" 2>&1
+
+    sleep 0.5
+
+    echo ""
+
+done
+
+echo "Press any key to go to the monitoring of the reports generation."
+echo "The program is running in the backgroundi, so you may quit with"
+echo "CTRL+C and it will resume, until finished or you terminate this session."
+echo
+echo "Press any key to continue ..."
+read -n 1 foo
+
+count=1
+while [ "${count}" -ge 1 ]; do
+    procs="$(ps -eo pid,%mem,%cpu,command | grep -v grep | grep jira-agile-metrics | sort)"
+    count=$(echo -n "$procs" | wc -l)
+    clear
+    echo "Processing jira-agile-metrics reports in paralel, in the background"
+    echo  ""
+    echo "Waiting for jobs to finish: [${count}]"
+    echo ""
+    echo "PID, MEM, CPU, COMMAND:"
+    echo "${procs}" | grep --color=always -s "^[0-9]\+\|$"
+    echo ""
+    echo "----------------------------------------------------------"
+    echo "You may close this and return to terminal with CTRL+C."
+    echo "Closing this won't terminate the processes running."
+    echo "List the processes with: ps aux | grep jira-agile-metrics"
+    echo "----------------------------------------------------------"
+    sleep 0.5
+done
+
+sleep 2
+
+echo
+echo "Process complete!"§
