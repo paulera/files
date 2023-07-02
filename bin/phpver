@@ -1,0 +1,9 @@
+#!/bin/bash
+
+if [ "${OS}" = "mac" ]; then
+    $FILESROOT/bin/mac/phpver $*
+    exit $?
+fi
+
+echo -e "${cRed}error:${c0} PHPVER is not ported for the operating sysmtem ${cCyan}${OS}${c0}".
+echo "Go ahead, implement it."
