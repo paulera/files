@@ -1,0 +1,97 @@
+#!/usr/bin/env python3
+
+import argparse
+from PIL import Image, ImageSequence
+
+def split_spritesheet(filename, width, height, x_offset, y_offset, row_number, create_gif):
+    image = Image.open(filename)
+    total_width, total_height = image.size
+
+    if width.endswith("px"):
+        sprite_width = int(width[:-2])
+    else:
+        sprite_width = total_width // int(width)
+
+    if height.endswith("px"):
+        sprite_height = int(height[:-2])
+    else:
+        sprite_height = total_height // int(height)
+
+    num_cols = total_width // sprite_width
+    num_rows = total_height // sprite_height
+
+    if row_number is None:
+        for row in range(num_rows):
+            row_left = x_offset
+            row_upper = row * sprite_height + y_offset
+            row_right = row_left + total_width
+            row_lower = row_upper + sprite_height
+
+            row_image = image.crop((row_left, row_upper, row_right, row_lower))
+            row_image.save(f"{filename}.row{row}.png")
+
+            if create_gif:
+                gif_frames = [
+                    image.crop((col * sprite_width + x_offset, row_upper, (col + 1) * sprite_width + x_offset, row_lower))
+                    for col in range(num_cols)
+                ]
+                gif = Image.new("RGBA", (sprite_width, sprite_height))
+                gif.save(f"{filename}.row{row}.gif", save_all=True, append_images=gif_frames, loop=0, duration=100)
+
+    else:
+        if row_number < 0 or row_number >= num_rows:
+            print("Invalid row number.")
+            return
+
+        row_left = x_offset
+        row_upper = row_number * sprite_height + y_offset
+        row_right = row_left + total_width
+        row_lower = row_upper + sprite_height
+
+        row_image = image.crop((row_left, row_upper, row_right, row_lower))
+        row_image.save(f"{filename}.row{row_number}.png")
+
+        if create_gif:
+            gif_frames = [
+                image.crop((col * sprite_width + x_offset, row_upper, (col + 1) * sprite_width + x_offset, row_lower))
+                for col in range(num_cols)
+            ]
+            gif = Image.new("RGBA", (sprite_width, sprite_height))
+            gif.save(f"{filename}.row{row_number}.gif", save_all=True, append_images=gif_frames, loop=0, duration=100)
+
+def display_usage():
+    usage = """Usage: splitsprite.py -w WIDTH -t HEIGHT [-x X_OFFSET] [-y Y_OFFSET] [-r [ROW]] filename
+
+    -w, --width     Width of each sprite or number of sprites in a row (integer or 'px').
+    -t, --height    Height of each sprite or number of sprites in a column (integer or 'px').
+    -x              Horizontal offset in pixels (optional).
+    -y              Vertical offset in pixels (optional).
+    -r, --row       Row number to extract or split all rows (optional).
+    filename        Filename of the spritesheet image.
+    """
+    print(usage)
+
+def main():
+    parser = argparse.ArgumentParser(description="Split spritesheets")
+    parser.add_argument("-w", "--width", required=True, help="Width of each sprite or number of sprites in a row")
+    parser.add_argument("-t", "--height", required=True, help="Height of each sprite or number of sprites in a column")
+    parser.add_argument("-x", default=0, type=int, help="Horizontal offset in pixels")
+    parser.add_argument("-y", default=0, type=int, help="Vertical offset in pixels")
+    parser.add_argument("-r", "--row", nargs='?', const=None, type=int, help="Row number to extract or split all rows (optional)")
+    parser.add_argument("-g", "--gif", action="store_true", help="Create GIF versions of each row")
+    parser.add_argument("filename", nargs="?", help="Filename of the spritesheet")
+    args = parser.parse_args()
+
+    if not args.filename or args.filename is None:
+        display_usage()
+        return
+
+    if not args.width or not args.height:
+        print("Error: Please provide width and height values.")
+        display_usage()
+        return
+
+    split_spritesheet(args.filename, args.width, args.height, args.x, args.y, args.row, args.gif)
+
+if __name__ == "__main__":
+    main()

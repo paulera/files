@@ -68,5 +68,5 @@ for i in "${!RESULT[@]}"; do
         fi
     
 done
-echo
-    
+
+echo -e "\n${cPurple}Found ${COUNT} occurences${c0}\n"
