@@ -27,16 +27,16 @@ export PS1="\
         # common
         if [ "$1" == "local" ]; then
 export PS1="\
-\[${cPurple}\]\$(ps1_tor)\[${c0}\]\
-\[${cWhite}\]\$(__git_ps1_abbreviated)\[${c0}\]\
+\[${cPurple}\]\$(type -t ps1_tor)\" == \"function\" ] &&  ps1_tor)\[${c0}\]\
+\[${cWhite}\]\$(type -t __git_ps1_abbreviated)\" == \"function\" ] &&  __git_ps1_abbreviated)\[${c0}\]\
 \[${cBlue}\]\\w\[${c0}\] \
 \\$ "
         else
 export PS1="\
-\[${cPurple}\]\$(ps1_tor)\[${c0}\]\
+\[${cPurple}\]\$([ \"\$(type -t ps1_tor)\" == \"function\" ] &&  ps1_tor)\[${c0}\]\
 \[${cGreen}\]\\u\[${c0}\] \
 \[${cCyan}\]@\\h\[${c0}\] \
-\[${cWhite}\]\$(__git_ps1_abbreviated)\[${c0}\]\
+\[${cWhite}\]\$([ \"\$(type -t __git_ps1_abbreviated)\" == \"function\" ] &&  __git_ps1_abbreviated)\[${c0}\]\
 \[${cBlue}\]\\w\[${c0}\] \
 \\$ "
         fi
