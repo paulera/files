@@ -1,0 +1,24 @@
+#!/bin/bash
+
+FILE="$1"
+BASE=$(basename -- "$FILE" ".${FILE##*.}")
+TARGET="$BASE.mp4"
+VIDEO_CODEC="h264"
+AUDIO_CODEC="aac"
+echo
+echo -e Compressing ${cWhite}${FILE}${c0}
+echo
+echo -e "  * Video codec: ${cYellow}${VIDEO_CODEC}${c0}"
+echo -e "  * Audio codec: ${cYellow}${AUDIO_CODEC}${c0}"
+echo -e "  * Target file: ${cCyan}${TARGET}${c0}"
+echo
+
+if [ -f "${TARGET}" ]; then
+    echo -e "${cRed}Error: ${c0}${cWhite}${TARGET}${c0} already exists! Aborting." 
+    echo
+else
+    CMD="ffmpeg -i \"${FILE}\" -vcodec ${VIDEO_CODEC} -acodec ${AUDIO_CODEC} \"${TARGET}\""
+    echo -e "${cCyan}Command: ${c0}${CMD}"
+    echo
+    eval "${CMD}"
+fi
