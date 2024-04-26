@@ -35,7 +35,7 @@ export PS1="\
 export PS1="\
 \[${cPurple}\]\$([ \"\$(type -t ps1_tor)\" == \"function\" ] &&  ps1_tor)\[${c0}\]\
 \[${cGreen}\]\\u\[${c0}\] \
-\[${cCyan}\]@\\h\[${c0}\] \
+\[${cCyan}\]@$([ -z "$SSH_CONNECTION" ] && echo \\h || echo $SSH_CONNECTION | awk '{ print $3 }')\[${c0}\] \
 \[${cWhite}\]\$([ \"\$(type -t __git_ps1_abbreviated)\" == \"function\" ] &&  __git_ps1_abbreviated)\[${c0}\]\
 \[${cBlue}\]\\w\[${c0}\] \
 \\$ "
