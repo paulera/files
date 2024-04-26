@@ -1,0 +1,28 @@
+#!/usr/bin/env python3
+
+import pyautogui
+import time
+import random
+
+def simulate_mouse_movement():
+    while True:
+        # Generate a random duration for the pause interval (1 to 10 seconds)
+        pause_interval = random.uniform(1, 10)
+        time.sleep(pause_interval)
+
+        # Determine the screen size for a random destination within it
+        screenWidth, screenHeight = pyautogui.size()
+
+        # Generate a random destination on the screen
+        x_dest = random.randint(0, screenWidth)
+        y_dest = random.randint(0, screenHeight)
+
+        # Generate a random duration for the movement (0.5 to 3 seconds)
+        move_duration = random.uniform(0.5, 3)
+
+        # Generate a random speed for the movement
+        # Speed is implicitly defined by the duration and distance
+        pyautogui.moveTo(x_dest, y_dest, duration=move_duration)
+
+# Call the function to start simulating mouse movement
+simulate_mouse_movement()
