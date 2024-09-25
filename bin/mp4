@@ -3,13 +3,25 @@
 FILE="$1"
 BASE=$(basename -- "$FILE" ".${FILE##*.}")
 TARGET="$BASE.mp4"
+
+A=1
+while [ -f "${TARGET}" ]; do 
+    TARGET="$BASE ($A).mp4"
+    A=$((A+1))
+done
+
 VIDEO_CODEC="h264"
 AUDIO_CODEC="aac"
+
+DURATION=$(ffmpeg -i "${FILE}" 2>&1 | grep Duration | awk '{ print $2; }' | awk -F. '{ print $1; }')
+
 echo
 echo -e Compressing ${cWhite}${FILE}${c0}
 echo
 echo -e "  * Video codec: ${cYellow}${VIDEO_CODEC}${c0}"
 echo -e "  * Audio codec: ${cYellow}${AUDIO_CODEC}${c0}"
+echo -e "  * Duration   : ${cYellow}${DURATION}${c0}"
+echo
 echo -e "  * Target file: ${cCyan}${TARGET}${c0}"
 echo
 

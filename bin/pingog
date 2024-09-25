@@ -13,7 +13,6 @@ function title() {
     printf '\e]2;%s\a' "$1"
 }
 
-
 if [ -z $1 ]; then
     TARGET="google.com"
 else

@@ -1,0 +1,59 @@
+#!/bin/bash
+
+# Function to get the color based on the percentage
+get_color() {
+    local usage=$1
+    if [ "$usage" -ge 90 ]; then
+        echo -e "\033[1;31m"  # Bright Red
+    elif [ "$usage" -ge 70 ]; then
+        echo -e "\033[1;33m"  # Bright Yellow
+    elif [ "$usage" -ge 50 ]; then
+        echo -e "\033[1;36m"  # Bright Cyan
+    else
+        echo -e "\033[1;32m"  # Bright Green
+    fi
+}
+
+# Function to generate the bar
+generate_bar() {
+    local usage=$1
+    local bar_length=10
+    local used=$((usage / 10))
+    local remaining=$((bar_length - used))
+    printf "|%.0s" $(seq 1 $used)
+    printf ".%.0s" $(seq 1 $remaining)
+}
+
+# Get CPU usage (consolidated user and system)
+cpu_info=$(top -l 1 | grep "CPU usage")
+cpu_user=$(echo "$cpu_info" | awk '{print int($3)}')
+cpu_system=$(echo "$cpu_info" | awk '{print int($5)}')
+cpu_usage=$((cpu_user + cpu_system))
+
+# Get RAM usage
+mem_info=$(vm_stat)
+pages_free=$(echo "$mem_info" | grep "Pages free" | awk '{print $3}' | sed 's/\.//')
+pages_active=$(echo "$mem_info" | grep "Pages active" | awk '{print $3}' | sed 's/\.//')
+pages_inactive=$(echo "$mem_info" | grep "Pages inactive" | awk '{print $3}' | sed 's/\.//')
+pages_speculative=$(echo "$mem_info" | grep "Pages speculative" | awk '{print $3}' | sed 's/\.//')
+pages_wired=$(echo "$mem_info" | grep "Pages wired down" | awk '{print $4}' | sed 's/\.//')
+
+page_size=$(vm_stat | grep "page size of" | awk '{print $8}')
+
+used_mem=$(( (pages_active + pages_wired + pages_inactive + pages_speculative) * page_size ))
+free_mem=$(( pages_free * page_size ))
+total_mem=$(( used_mem + free_mem ))
+
+ram_usage=$(echo "$used_mem $total_mem" | awk '{printf("%d", ($1 / $2) * 100)}')
+
+# Get disk usage
+disk_usage=$(df / | tail -1 | awk '{print int($5)}')
+
+# Output with colors
+for label in "CPU $cpu_usage" "Rm $ram_usage" "HD $disk_usage"; do
+    usage=$(echo $label | awk '{print $2}')
+    color=$(get_color $usage)
+    bar=$(generate_bar $usage)
+    printf "${color}%-3s %3d%% ${bar}\033[0m\n" "$(echo $label | awk '{print $1}')" $usage
+done
+
