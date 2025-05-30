@@ -2,3 +2,5 @@ soft/
 .vscode
 .idea/
 .gitconfig
+.DS_Store
+

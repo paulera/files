@@ -1,0 +1,47 @@
+#!/bin/bash
+
+LC_ALL=en_US.UTF-8
+INTERVAL=5
+last_state=""
+
+notify() {
+  osascript -e "display notification \"$1\" with title \"Battery Monitor\""
+}
+
+while :; do
+    
+    current=$(ioreg -r -n AppleSmartBattery | awk '/"CurrentCapacity"/ {print $3}')
+    max=$(ioreg -r -n AppleSmartBattery | awk '/"MaxCapacity"/ {print $3}')
+    is_charging=$(ioreg -r -n AppleSmartBattery | awk -F'= ' '/"IsCharging"/ {print $2}')
+    is_connected=$(ioreg -r -n AppleSmartBattery | awk -F'= ' '/"ExternalConnected"/ {print $2}')
+    current_ma=$(ioreg -r -n AppleSmartBattery | sed -n 's/.*"LegacyBatteryInfo" = {[^}]*"Amperage"=\([-0-9]*\).*/\1/p')
+    current_a=$(echo "scale=2; $current_ma / 1000" | bc)
+    percent=$(( 100 * current / max ))
+
+    clear
+
+    echo "🔋 Battery"
+    echo ""
+    echo "Load: $percent%"
+    echo "$current of $max mAh"
+    echo ""
+
+    if [ "$is_connected" = "No" ]; then
+        state="disconnected"
+        message="🚫 Charger NOT connected."
+        echo "${message}"
+        [ "$state" != "$last_state" ] && notify "${message}"
+    elif [ "$is_charging" = "No" ]; then
+        state="not_charging"
+        message="⚠️  Charger connected, but battery is NOT charging! Possibly full or draining."
+        echo "${message}"
+        [ "$state" != "$last_state" ] && notify "${message}"
+    else
+        state="charging"
+        message="⚡️ Charging normally (${current_a} A)"
+        echo "${message}"
+    fi
+
+    last_state="$state"
+    sleep $INTERVAL
+done
