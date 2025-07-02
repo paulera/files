@@ -1,21 +1,29 @@
 #!/usr/bin/env python3
 """
-Simple CLI tool to run JQL queries against a Jira instance and display results in an ASCII table.
+Simple CLI tool to run JQL queries against a Jira instance and display results in an ASCII table with automatic wrapping,
+or raw output for scripting.
 
 Usage:
-  jql [-f fields] <JQL query>
+  jql [-f fields] [--raw] [-s SEP] <JQL query>
 
 Environment variables:
   JIRA_API_TOKEN  - your Jira API token
   JIRA_URL        - the base URL of your Jira instance (e.g. https://your-domain.atlassian.net)
   JIRA_USER       - your Jira user/email (for Basic auth)
+
+Modes:
+  Visual (default): nice-looking ASCII table with wrapping
+  Raw (--raw): each record as field values separated by SEP (default ",")
 """
 import os
 import sys
 import argparse
 import requests
+import shutil
+import textwrap
 from requests.auth import HTTPBasicAuth
 from tabulate import tabulate
+
 
 def main():
     # Read environment
@@ -32,12 +40,22 @@ def main():
     default_fields = ["issuekey", "type", "priority", "status", "summary"]
     parser = argparse.ArgumentParser(
         prog='jql',
-        description='Run a JQL query against Jira and display results in an ASCII table.'
+        description='Run a JQL query against Jira and display results in a table or raw format.'
     )
     parser.add_argument(
         '-f', '--fields',
         help='Comma-separated list of fields to return (default: issuekey,type,priority,status,summary)',
         default=','.join(default_fields)
+    )
+    parser.add_argument(
+        '--raw',
+        action='store_true',
+        help='Raw output mode: only field values separated by SEP'
+    )
+    parser.add_argument(
+        '-s', '--sep',
+        help='Field separator for raw mode (default: ",")',
+        default=','
     )
     parser.add_argument(
         'jql',
@@ -60,7 +78,7 @@ def main():
     }
     auth = HTTPBasicAuth(user, api_token)
 
-    # Execute
+    # Execute request
     response = requests.get(api_endpoint, auth=auth, params=params)
     if response.status_code == 401:
         sys.stderr.write(
@@ -79,10 +97,16 @@ def main():
         print("No issues found.")
         return
 
-    # Build rows
-    rows = []
+    # Prepare rows: raw and wrapped
+    raw_rows = []
+    wrapped_rows = []
+    # Determine wrapping width based on terminal size
+    term_width = shutil.get_terminal_size((80, 20)).columns
+    max_col_width = max(10, term_width // len(fields_list) - 3)
+
     for issue in issues:
-        row = []
+        raw_row = []
+        wrap_row = []
         fields = issue.get('fields', {})
         for f in fields_list:
             key = f.lower()
@@ -95,17 +119,24 @@ def main():
             elif key == 'priority':
                 val = fields.get('priority', {}).get('name', '')
             else:
-                # generic field
                 raw = fields.get(f, '')
                 if isinstance(raw, dict) and 'name' in raw:
                     val = raw['name']
                 else:
                     val = str(raw)
-            row.append(val)
-        rows.append(row)
+            raw_row.append(val)
+            wrap_row.append(textwrap.fill(val, width=max_col_width))
+        raw_rows.append(raw_row)
+        wrapped_rows.append(wrap_row)
 
-    # Print table
-    print(tabulate(rows, headers=fields_list, tablefmt='grid'))
+    if args.raw:
+        # Print only values separated by SEP
+        for row in raw_rows:
+            print(args.sep.join(row))
+    else:
+        # Print wrapped table
+        print(tabulate(wrapped_rows, headers=fields_list, tablefmt='grid'))
+
 
 if __name__ == '__main__':
     main()
