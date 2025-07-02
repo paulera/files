@@ -1,10 +1,18 @@
 #!/usr/bin/env python3
+#AI-MADE
 """
-Simple CLI tool to run JQL queries against a Jira instance and display results in an ASCII table with automatic wrapping,
+Simple CLI tool to run JQL queries against a Jira instance and display results in an ASCII table with optional field wrapping/truncation,
 or raw output for scripting.
 
 Usage:
-  jql [-f fields] [--raw] [-s SEP] <JQL query>
+  jql [-f fields] [-r|--raw] [-s SEP] [-n LIMIT] <JQL query>
+
+Fields syntax:
+  Specify fields as comma-separated names, with optional wrapping (parentheses) or truncation (square brackets):
+    summary(40),status,priority[10]
+  - summary(40) wraps at 40 chars
+  - priority[10] truncates to 10 chars
+  - status with no spec is unmodified
 
 Environment variables:
   JIRA_API_TOKEN  - your Jira API token
@@ -12,21 +20,52 @@ Environment variables:
   JIRA_USER       - your Jira user/email (for Basic auth)
 
 Modes:
-  Visual (default): nice-looking ASCII table with wrapping
-  Raw (--raw): each record as field values separated by SEP (default ",")
+  Visual (default): ASCII table, honoring per-field wrap/truncate widths, shows the JQL query in yellow above the table
+  Raw (-r, --raw): each record as field values separated by SEP (default "|")
+
+Options:
+  -f, --fields      Fields list, e.g. issuekey,summary(50),status,priority[10]
+  -r, --raw         Raw output mode: only field values separated by SEP
+  -s SEP, --sep SEP Field separator for raw mode (default: "|")
+  -n LIMIT, --limit LIMIT
+                     Maximum number of issues to return (default: 100; -1 for all)
+  -h, --help        Show this help message and exit
 """
 import os
 import sys
 import argparse
 import requests
-import shutil
+import re
 import textwrap
 from requests.auth import HTTPBasicAuth
 from tabulate import tabulate
 
 
+def fetch_issues(api_endpoint, auth, params, limit):
+    issues = []
+    start_at = 0
+    page_size = 100 if limit < 0 else min(limit, 100)
+    while True:
+        params.update({'startAt': start_at, 'maxResults': page_size})
+        resp = requests.get(api_endpoint, auth=auth, params=params)
+        if resp.status_code != 200:
+            sys.stderr.write(f"Error: Jira API returned {resp.status_code}: {resp.text}\n")
+            sys.exit(1)
+        data = resp.json()
+        batch = data.get('issues', [])
+        if not batch:
+            break
+        issues.extend(batch)
+        if limit > 0 and len(issues) >= limit:
+            issues = issues[:limit]
+            break
+        if len(batch) < page_size:
+            break
+        start_at += page_size
+    return issues
+
+
 def main():
-    # Read environment
     jira_url = os.getenv('JIRA_URL')
     api_token = os.getenv('JIRA_API_TOKEN')
     user = os.getenv('JIRA_USER')
@@ -36,26 +75,33 @@ def main():
         )
         sys.exit(1)
 
-    # Parse arguments
     default_fields = ["issuekey", "type", "priority", "status", "summary"]
     parser = argparse.ArgumentParser(
         prog='jql',
-        description='Run a JQL query against Jira and display results in a table or raw format.'
+        description='Run a JQL query against Jira and display results in a table or raw format.',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=__doc__
     )
     parser.add_argument(
         '-f', '--fields',
-        help='Comma-separated list of fields to return (default: issuekey,type,priority,status,summary)',
+        help='Fields list, e.g. issuekey,summary(50),status,priority[10]',
         default=','.join(default_fields)
     )
     parser.add_argument(
-        '--raw',
+        '-r', '--raw',
         action='store_true',
         help='Raw output mode: only field values separated by SEP'
     )
     parser.add_argument(
         '-s', '--sep',
-        help='Field separator for raw mode (default: ",")',
-        default=','
+        help='Field separator for raw mode (default: "|")',
+        default='|'
+    )
+    parser.add_argument(
+        '-n', '--limit',
+        type=int,
+        help='Maximum number of issues to return (default: 100; -1 for all)',
+        default=100
     )
     parser.add_argument(
         'jql',
@@ -64,52 +110,46 @@ def main():
     )
     args = parser.parse_args()
 
-    # Build query
-    fields_list = [f.strip() for f in args.fields.split(',') if f.strip()]
-    jql_query = ' '.join(args.jql)
+    # Parse fields with optional wrap (()) or truncate ([]) widths
+    field_specs = []
+    for spec in args.fields.split(','):
+        s = spec.strip()
+        wrap = truncate = None
+        m_wrap = re.match(r'^(.+?)\((\d+)\)$', s)
+        m_trunc = re.match(r'^(.+?)\[(\d+)\]$', s)
+        if m_wrap:
+            name = m_wrap.group(1)
+            wrap = int(m_wrap.group(2))
+        elif m_trunc:
+            name = m_trunc.group(1)
+            truncate = int(m_trunc.group(2))
+        else:
+            name = s
+        field_specs.append((name, wrap, truncate))
+    field_names = [fs[0] for fs in field_specs]
 
-    # Prepare request
+    # Build JQL query
+    jql_query = ' '.join(args.jql)
     api_endpoint = f"{jira_url.rstrip('/')}/rest/api/2/search"
     params = {
         'jql': jql_query,
-        'fields': ','.join(
-            ['issuetype' if f.lower() == 'type' else f for f in fields_list]
-        )
+        'fields': ','.join(['issuetype' if f.lower() == 'type' else f for f in field_names])
     }
     auth = HTTPBasicAuth(user, api_token)
 
-    # Execute request
-    response = requests.get(api_endpoint, auth=auth, params=params)
-    if response.status_code == 401:
-        sys.stderr.write(
-            "Authentication failed (401). Please check JIRA_USER and JIRA_API_TOKEN.\n"
-        )
-        sys.exit(1)
-    if response.status_code != 200:
-        sys.stderr.write(
-            f"Error: Jira API returned {response.status_code}: {response.text}\n"
-        )
-        sys.exit(1)
-
-    data = response.json()
-    issues = data.get('issues', [])
+    issues = fetch_issues(api_endpoint, auth, params, args.limit)
     if not issues:
         print("No issues found.")
         return
 
-    # Prepare rows: raw and wrapped
     raw_rows = []
-    wrapped_rows = []
-    # Determine wrapping width based on terminal size
-    term_width = shutil.get_terminal_size((80, 20)).columns
-    max_col_width = max(10, term_width // len(fields_list) - 3)
-
+    visual_rows = []
     for issue in issues:
         raw_row = []
-        wrap_row = []
+        vis_row = []
         fields = issue.get('fields', {})
-        for f in fields_list:
-            key = f.lower()
+        for name, wrap_width, trunc_width in field_specs:
+            key = name.lower()
             if key == 'issuekey':
                 val = issue.get('key', '')
             elif key == 'type':
@@ -119,23 +159,29 @@ def main():
             elif key == 'priority':
                 val = fields.get('priority', {}).get('name', '')
             else:
-                raw = fields.get(f, '')
-                if isinstance(raw, dict) and 'name' in raw:
-                    val = raw['name']
+                raw_data = fields.get(name, '')
+                if isinstance(raw_data, dict) and 'name' in raw_data:
+                    val = raw_data['name']
                 else:
-                    val = str(raw)
+                    val = str(raw_data)
             raw_row.append(val)
-            wrap_row.append(textwrap.fill(val, width=max_col_width))
+            if wrap_width:
+                vis_val = textwrap.fill(val, width=wrap_width)
+            elif trunc_width is not None:
+                vis_val = val[:trunc_width]
+            else:
+                vis_val = val
+            vis_row.append(vis_val)
         raw_rows.append(raw_row)
-        wrapped_rows.append(wrap_row)
+        visual_rows.append(vis_row)
 
     if args.raw:
-        # Print only values separated by SEP
         for row in raw_rows:
             print(args.sep.join(row))
     else:
-        # Print wrapped table
-        print(tabulate(wrapped_rows, headers=fields_list, tablefmt='grid'))
+        # Show query in yellow before table
+        print(f"\n\033[1;33m{jql_query}\033[0m\n")
+        print(tabulate(visual_rows, headers=field_names, tablefmt='grid'))
 
 
 if __name__ == '__main__':
