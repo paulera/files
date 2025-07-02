@@ -6,7 +6,7 @@ Simple CLI tool to run JQL queries against a Jira instance and display results i
 or raw output for scripting, or list available JQL fields.
 
 Usage:
-  jql [-f fields] [-r|--raw] [-s SEP] [-n LIMIT] [-T TABLEFMT] [--list-fields] <JQL query>
+  jql [-f fields] [-r|--raw] [-s SEP] [-n LIMIT] [-T TABLEFMT] [--list-fields [all|jira|custom]] <JQL query>
 
 Fields syntax:
   Specify fields as comma-separated names, with optional wrapping (parentheses) or truncation (square brackets):
@@ -23,7 +23,8 @@ Environment variables:
 Modes:
   Visual (default): ASCII table, honoring per-field wrap/truncate widths, shows the JQL query in yellow above the table with bright-white headers, and the resulting row count below
   Raw (-r, --raw): each record as field values separated by SEP (default "|")
-  List Fields (--list-fields): list all available JQL fields (with clause names) and exit
+  List Fields (--list-fields): list JQL fields then exit
+    optional value: all (default), jira (only native fields), custom (only custom fields)
 
 Options:
   -f, --fields      Fields list, e.g. issuekey,summary(50),status,priority[10]
@@ -33,7 +34,8 @@ Options:
                      Maximum number of issues to return (default: 100; -1 for all)
   -T TABLEFMT, --tablefmt TABLEFMT
                      Table format for visual mode (tabulate tablefmt; default: "simple_grid")
-  --list-fields     List all available JQL fields (with clause names) and exit
+  --list-fields [all|jira|custom]
+                     List fields (all/jira/custom) and exit
   -h, --help        Show this help message and exit
 """
 import os
@@ -70,18 +72,22 @@ def fetch_issues(api_endpoint, auth, params, limit):
     return issues
 
 
-def list_fields(api_endpoint, auth):
-    # Use API v3 to list fields with clauseNames
+def list_fields(api_endpoint, auth, category):
+    # Use API v3 to list fields
     resp = requests.get(f"{api_endpoint.rstrip('/')}/rest/api/3/field", auth=auth)
     if resp.status_code != 200:
         sys.stderr.write(f"Error listing fields: {resp.status_code}: {resp.text}\n")
         sys.exit(1)
-    for field in resp.json():
-        fid = field.get('id')
-        name = field.get('name')
-        clause_names = field.get('clauseNames', []) or []
-        clauses = [fid] + [c for c in clause_names if c != fid]
-        print(f"{name}:{','.join(clauses)}")
+    fields = resp.json()
+    # Filter by category
+    if category == 'jira':
+        fields = [f for f in fields if not f.get('id', '').startswith('customfield_')]
+    elif category == 'custom':
+        fields = [f for f in fields if f.get('id', '').startswith('customfield_')]
+    # Sort alphabetically by display name
+    fields.sort(key=lambda f: f.get('name', '').lower())
+    for field in fields:
+        print(f"{field.get('name')}:{field.get('id')}")
     sys.exit(0)
 
 
@@ -98,7 +104,7 @@ def main():
     default_fields = ["issuekey", "type", "priority", "status", "summary"]
     parser = argparse.ArgumentParser(
         prog='jql',
-        description='Run a JQL query against Jira and display results, or list fields.',
+        description='Run a JQL query against Jira or list fields.',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__
     )
@@ -130,8 +136,10 @@ def main():
     )
     parser.add_argument(
         '--list-fields',
-        action='store_true',
-        help='List all available JQL fields (with clause names) and exit'
+        nargs='?',
+        const='all',
+        choices=['all', 'jira', 'custom'],
+        help='List fields (all/jira/custom) and exit'
     )
     parser.add_argument(
         'jql',
@@ -142,9 +150,8 @@ def main():
 
     auth = HTTPBasicAuth(user, api_token)
 
-    # Handle list-fields
-    if args.list_fields:
-        list_fields(jira_url, auth)
+    if args.list_fields is not None:
+        list_fields(jira_url, auth, args.list_fields)
 
     if not args.jql:
         parser.error('A JQL query is required unless --list-fields is used')
