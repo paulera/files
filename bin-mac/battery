@@ -9,6 +9,11 @@ notify() {
   osascript -e "display notification \"$1\" with title \"Battery Monitor\""
 }
 
+unset BATTERY_LOOP
+if [ "$1" == "loop" ] || [ "$1" == "--loop" ] || [ "$1" == "-l" ]; then
+    BATTERY_LOOP=1
+fi
+
 while :; do
     
     current=$(ioreg -r -n AppleSmartBattery | awk '/"CurrentCapacity"/ {print $3}')
@@ -19,7 +24,7 @@ while :; do
     current_a=$(echo "scale=2; $current_ma / 1000" | bc)
     percent=$(( 100 * current / max ))
 
-    clear
+    [ $BATTERY_LOOP ] && clear
 
     echo "🔋 Battery: $percent%"
     echo "$current of $max mAh"
@@ -28,7 +33,7 @@ while :; do
         state="disconnected"
         message="🚫 Charger NOT connected"
         printf "${cRed}"
-    elif [ "$current" = "$max" ]; then
+    elif [ "$current" = "$max" ] || (( $percent >= 98 )); then
         state="full"
         message="✅ Fully charged"
         printf "${cGreen}"
@@ -45,7 +50,13 @@ while :; do
     printf "${message}${c0}"
     [ "$state" != "$last_state" ] && notify "${message}"
 
-    last_state="$state"
-    read -t $INTERVAL -n 1 -s -r
+    if [ $BATTERY_LOOP ]; then
+        last_state="$state"
+        read -t $INTERVAL -n 1 -s -r -p "
+"
+    else
+        printf "${c0}\n"
+        exit
+    fi
 
 done
