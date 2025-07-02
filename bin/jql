@@ -5,7 +5,7 @@ Simple CLI tool to run JQL queries against a Jira instance and display results i
 or raw output for scripting.
 
 Usage:
-  jql [-f fields] [-r|--raw] [-s SEP] [-n LIMIT] <JQL query>
+  jql [-f fields] [-r|--raw] [-s SEP] [-n LIMIT] [-T TABLEFMT] <JQL query>
 
 Fields syntax:
   Specify fields as comma-separated names, with optional wrapping (parentheses) or truncation (square brackets):
@@ -20,7 +20,7 @@ Environment variables:
   JIRA_USER       - your Jira user/email (for Basic auth)
 
 Modes:
-  Visual (default): ASCII table, honoring per-field wrap/truncate widths, shows the JQL query in yellow above the table
+  Visual (default): ASCII table, honoring per-field wrap/truncate widths, shows the JQL query in yellow above the table with bright-white headers
   Raw (-r, --raw): each record as field values separated by SEP (default "|")
 
 Options:
@@ -29,6 +29,8 @@ Options:
   -s SEP, --sep SEP Field separator for raw mode (default: "|")
   -n LIMIT, --limit LIMIT
                      Maximum number of issues to return (default: 100; -1 for all)
+  -T TABLEFMT, --tablefmt TABLEFMT
+                     Table format for visual mode (tabulate tablefmt; default: "simple_grid")
   -h, --help        Show this help message and exit
 """
 import os
@@ -102,6 +104,11 @@ def main():
         type=int,
         help='Maximum number of issues to return (default: 100; -1 for all)',
         default=100
+    )
+    parser.add_argument(
+        '-T', '--tablefmt',
+        help='Table format for visual mode (tabulate tablefmt; default: "simple_grid")',
+        default='simple_grid'
     )
     parser.add_argument(
         'jql',
@@ -181,7 +188,9 @@ def main():
     else:
         # Show query in yellow before table
         print(f"\n\033[1;33m{jql_query}\033[0m\n")
-        print(tabulate(visual_rows, headers=field_names, tablefmt='grid'))
+        # Color headers bright white
+        colored_headers = [f"\033[1;37m{h}\033[0m" for h in field_names]
+        print(tabulate(visual_rows, headers=colored_headers, tablefmt=args.tablefmt))
 
 
 if __name__ == '__main__':
