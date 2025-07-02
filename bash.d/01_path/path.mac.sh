@@ -1,7 +1,9 @@
 if [ "$OS" == "mac" ]; then
+    
+    PATH=$PATH:$FILESROOT/bin-mac
+    
     PATH_COREUTILS="/usr/local/opt/coreutils/libexec/gnubin/"
     PATH_COREUTILS_MAC="/opt/homebrew/opt/coreutils/libexec/gnubin/"
-    PATH=$PATH:$FILESROOT/bin-mac
     if [ ! -d "${PATH_COREUTILS}" ] && [ ! -d "${PATH_COREUTILS_MAC}" ]; then
         files_debug "Error: missing coreutils on mac environment" "error"
         echo "For the FILES package to work on MacOS environments"

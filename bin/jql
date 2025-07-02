@@ -1,0 +1,112 @@
+#!/usr/bin/env python3
+"""
+Simple CLI tool to run JQL queries against a Jira instance and display results in an ASCII table.
+
+Usage:
+  jql [-f fields] <JQL query>
+
+Environment variables:
+  JIRA_API_TOKEN  - your Jira API token
+  JIRA_URL        - the base URL of your Jira instance (e.g. https://your-domain.atlassian.net)
+  JIRA_USER       - your Jira user/email (for Basic auth)
+"""
+import os
+import sys
+import argparse
+import requests
+from requests.auth import HTTPBasicAuth
+from tabulate import tabulate
+
+def main():
+    # Read environment
+    jira_url = os.getenv('JIRA_URL')
+    api_token = os.getenv('JIRA_API_TOKEN')
+    user = os.getenv('JIRA_USER')
+    if not jira_url or not api_token or not user:
+        sys.stderr.write(
+            "Error: JIRA_URL, JIRA_API_TOKEN, and JIRA_USER environment variables must all be set.\n"
+        )
+        sys.exit(1)
+
+    # Parse arguments
+    default_fields = ["issuekey", "type", "priority", "status", "summary"]
+    parser = argparse.ArgumentParser(
+        prog='jql',
+        description='Run a JQL query against Jira and display results in an ASCII table.'
+    )
+    parser.add_argument(
+        '-f', '--fields',
+        help='Comma-separated list of fields to return (default: issuekey,type,priority,status,summary)',
+        default=','.join(default_fields)
+    )
+    parser.add_argument(
+        'jql',
+        nargs='+',
+        help='The JQL query to execute (wrap in quotes if it contains spaces)'
+    )
+    args = parser.parse_args()
+
+    # Build query
+    fields_list = [f.strip() for f in args.fields.split(',') if f.strip()]
+    jql_query = ' '.join(args.jql)
+
+    # Prepare request
+    api_endpoint = f"{jira_url.rstrip('/')}/rest/api/2/search"
+    params = {
+        'jql': jql_query,
+        'fields': ','.join(
+            ['issuetype' if f.lower() == 'type' else f for f in fields_list]
+        )
+    }
+    auth = HTTPBasicAuth(user, api_token)
+
+    # Execute
+    response = requests.get(api_endpoint, auth=auth, params=params)
+    if response.status_code == 401:
+        sys.stderr.write(
+            "Authentication failed (401). Please check JIRA_USER and JIRA_API_TOKEN.\n"
+        )
+        sys.exit(1)
+    if response.status_code != 200:
+        sys.stderr.write(
+            f"Error: Jira API returned {response.status_code}: {response.text}\n"
+        )
+        sys.exit(1)
+
+    data = response.json()
+    issues = data.get('issues', [])
+    if not issues:
+        print("No issues found.")
+        return
+
+    # Build rows
+    rows = []
+    for issue in issues:
+        row = []
+        fields = issue.get('fields', {})
+        for f in fields_list:
+            key = f.lower()
+            if key == 'issuekey':
+                val = issue.get('key', '')
+            elif key == 'type':
+                val = fields.get('issuetype', {}).get('name', '')
+            elif key == 'status':
+                val = fields.get('status', {}).get('name', '')
+            elif key == 'priority':
+                val = fields.get('priority', {}).get('name', '')
+            else:
+                # generic field
+                raw = fields.get(f, '')
+                if isinstance(raw, dict) and 'name' in raw:
+                    val = raw['name']
+                else:
+                    val = str(raw)
+            row.append(val)
+        rows.append(row)
+
+    # Print table
+    print(tabulate(rows, headers=fields_list, tablefmt='grid'))
+
+if __name__ == '__main__':
+    main()
+

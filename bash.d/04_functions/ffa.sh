@@ -12,16 +12,17 @@ ffa () {
             --exclude-dir=".git" \
             --exclude-dir="vendor" \
             --exclude-dir="node_modules" \
-            -B2 -F2 \
-            -i -n -H -a -R -I "$*" * &> /dev/stdout | tee /tmp/files_that
+            -C2 \
+            -i -n -H -a -R -I "$*" * &> /dev/stdout | tee ~/.files_that
 
         # remove colors
-        sed -r -i 's/\x1B\[[0-9;]*[JKmsu]//g' /tmp/files_that
+        sed -i -r 's/\x1B\[[0-9;]*[JKmsu]//g' ~/.files_that
 
         # leave only occurence lines
-        perl -i -ne 'print if /:[0-9]+:/' /tmp/files_that
+        perl -i -ne 'print if /:[0-9]+:/' ~/.files_that
 
         # leaves only the filename
-        sed -r -i 's/:.*$//g' /tmp/files_that
+        sed -i -r 's/:.*$//g' ~/.files_that
+        sed -i -r 's/\x1B\[[0-9;]*[JKmsu]//g' ~/.files_that
 }
 export -f ffa

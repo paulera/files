@@ -1,4 +1,5 @@
 #!/bin/bash
+# TODO: calculate the charging rate (mAh/minute) and estimated time to full
 
 LC_ALL=en_US.UTF-8
 INTERVAL=5
@@ -20,28 +21,31 @@ while :; do
 
     clear
 
-    echo "🔋 Battery"
-    echo ""
-    echo "Load: $percent%"
+    echo "🔋 Battery: $percent%"
     echo "$current of $max mAh"
-    echo ""
 
     if [ "$is_connected" = "No" ]; then
         state="disconnected"
-        message="🚫 Charger NOT connected."
-        echo "${message}"
-        [ "$state" != "$last_state" ] && notify "${message}"
+        message="🚫 Charger NOT connected"
+        printf "${cRed}"
+    elif [ "$current" = "$max" ]; then
+        state="full"
+        message="✅ Fully charged"
+        printf "${cGreen}"
     elif [ "$is_charging" = "No" ]; then
         state="not_charging"
-        message="⚠️  Charger connected, but battery is NOT charging! Possibly full or draining."
-        echo "${message}"
-        [ "$state" != "$last_state" ] && notify "${message}"
+        message="⚠️  Connected but NOT charging!" 
+        printf "${cYellow}"
     else
         state="charging"
-        message="⚡️ Charging normally (${current_a} A)"
-        echo "${message}"
+        message="⚡️ Charging ... (${current_a} A)"
+        printf "${cCyan}"
     fi
+    
+    printf "${message}${c0}"
+    [ "$state" != "$last_state" ] && notify "${message}"
 
     last_state="$state"
-    sleep $INTERVAL
+    read -t $INTERVAL -n 1 -s -r
+
 done
