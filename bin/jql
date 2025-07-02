@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-#AI-MADE
+# AI-MADE
+# https://chatgpt.com/share/68652076-c23c-800f-9cc5-cfff4a7a1616
 """
 Simple CLI tool to run JQL queries against a Jira instance and display results in an ASCII table with optional field wrapping/truncation,
-or raw output for scripting.
+or raw output for scripting, or list available JQL fields.
 
 Usage:
-  jql [-f fields] [-r|--raw] [-s SEP] [-n LIMIT] [-T TABLEFMT] <JQL query>
+  jql [-f fields] [-r|--raw] [-s SEP] [-n LIMIT] [-T TABLEFMT] [--list-fields] <JQL query>
 
 Fields syntax:
   Specify fields as comma-separated names, with optional wrapping (parentheses) or truncation (square brackets):
@@ -20,8 +21,9 @@ Environment variables:
   JIRA_USER       - your Jira user/email (for Basic auth)
 
 Modes:
-  Visual (default): ASCII table, honoring per-field wrap/truncate widths, shows the JQL query in yellow above the table with bright-white headers
+  Visual (default): ASCII table, honoring per-field wrap/truncate widths, shows the JQL query in yellow above the table with bright-white headers, and the resulting row count below
   Raw (-r, --raw): each record as field values separated by SEP (default "|")
+  List Fields (--list-fields): list all available JQL fields (with clause names) and exit
 
 Options:
   -f, --fields      Fields list, e.g. issuekey,summary(50),status,priority[10]
@@ -31,6 +33,7 @@ Options:
                      Maximum number of issues to return (default: 100; -1 for all)
   -T TABLEFMT, --tablefmt TABLEFMT
                      Table format for visual mode (tabulate tablefmt; default: "simple_grid")
+  --list-fields     List all available JQL fields (with clause names) and exit
   -h, --help        Show this help message and exit
 """
 import os
@@ -67,6 +70,21 @@ def fetch_issues(api_endpoint, auth, params, limit):
     return issues
 
 
+def list_fields(api_endpoint, auth):
+    # Use API v3 to list fields with clauseNames
+    resp = requests.get(f"{api_endpoint.rstrip('/')}/rest/api/3/field", auth=auth)
+    if resp.status_code != 200:
+        sys.stderr.write(f"Error listing fields: {resp.status_code}: {resp.text}\n")
+        sys.exit(1)
+    for field in resp.json():
+        fid = field.get('id')
+        name = field.get('name')
+        clause_names = field.get('clauseNames', []) or []
+        clauses = [fid] + [c for c in clause_names if c != fid]
+        print(f"{name}:{','.join(clauses)}")
+    sys.exit(0)
+
+
 def main():
     jira_url = os.getenv('JIRA_URL')
     api_token = os.getenv('JIRA_API_TOKEN')
@@ -80,7 +98,7 @@ def main():
     default_fields = ["issuekey", "type", "priority", "status", "summary"]
     parser = argparse.ArgumentParser(
         prog='jql',
-        description='Run a JQL query against Jira and display results in a table or raw format.',
+        description='Run a JQL query against Jira and display results, or list fields.',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__
     )
@@ -111,13 +129,27 @@ def main():
         default='simple_grid'
     )
     parser.add_argument(
+        '--list-fields',
+        action='store_true',
+        help='List all available JQL fields (with clause names) and exit'
+    )
+    parser.add_argument(
         'jql',
-        nargs='+',
+        nargs='*',
         help='The JQL query to execute (wrap in quotes if it contains spaces)'
     )
     args = parser.parse_args()
 
-    # Parse fields with optional wrap (()) or truncate ([]) widths
+    auth = HTTPBasicAuth(user, api_token)
+
+    # Handle list-fields
+    if args.list_fields:
+        list_fields(jira_url, auth)
+
+    if not args.jql:
+        parser.error('A JQL query is required unless --list-fields is used')
+
+    # Parse fields with optional wrap/truncate
     field_specs = []
     for spec in args.fields.split(','):
         s = spec.strip()
@@ -135,16 +167,15 @@ def main():
         field_specs.append((name, wrap, truncate))
     field_names = [fs[0] for fs in field_specs]
 
-    # Build JQL query
+    # Build JQL search
     jql_query = ' '.join(args.jql)
-    api_endpoint = f"{jira_url.rstrip('/')}/rest/api/2/search"
+    api_search = f"{jira_url.rstrip('/')}/rest/api/3/search"
     params = {
         'jql': jql_query,
         'fields': ','.join(['issuetype' if f.lower() == 'type' else f for f in field_names])
     }
-    auth = HTTPBasicAuth(user, api_token)
 
-    issues = fetch_issues(api_endpoint, auth, params, args.limit)
+    issues = fetch_issues(api_search, auth, params, args.limit)
     if not issues:
         print("No issues found.")
         return
@@ -186,11 +217,10 @@ def main():
         for row in raw_rows:
             print(args.sep.join(row))
     else:
-        # Show query in yellow before table
+        # Show query in yellow
         print(f"\n\033[1;33m{jql_query}\033[0m")
-        # Show resulting row count
-        print(f"{len(issues)} issues found\n")
-        # Color headers bright white
+        print(f"\033[1;37m{len(issues)} rows\033[0m\n")
+        # Bright-white headers
         colored_headers = [f"\033[1;37m{h}\033[0m" for h in field_names]
         print(tabulate(visual_rows, headers=colored_headers, tablefmt=args.tablefmt))
 
