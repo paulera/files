@@ -81,7 +81,6 @@ def fetch_and_build_map(api, auth):
         alias_map[name] = fid
         for c in f.get('clauseNames', []) or []:
             alias_map[c] = fid
-    # Remove any cf[...] entries if present (not persisted)
     alias_map = {k: v for k, v in alias_map.items() if not CF_RE.match(k)}
     with open(CONFIG_PATH, 'w') as fp:
         json.dump({'fields_map': alias_map}, fp)
@@ -165,9 +164,8 @@ def main():
             real = f"customfield_{mcf.group(1)}"
         else:
             real = amap.get(alias, alias)
-        display = alias if alias == 'issuekey' or alias == 'key' else next(
-            (k for k, v in amap.items() if v == real), alias
-        )
+        display = alias if alias in ('issuekey','key') else next(
+            (k for k, v in amap.items() if v == real), alias)
         specs.append((real, wrap, trunc, display))
 
     url = f"{api}/rest/api/3/search"
@@ -180,26 +178,39 @@ def main():
     raw_rows = []
     vis_rows = []
     for issue in issues:
-        rowr, rowv = [], []
+        rowr = []
+        rowv = []
         data = issue.get('fields', {})
         for real, wrap, trunc, disp in specs:
-            if real == 'issuekey':
+            if real in ('issuekey','key'):
                 val = issue.get('key', '')
             else:
                 x = data.get(real, '')
                 if isinstance(x, dict):
-                    if x.get('type') == 'doc':
+                    if 'displayName' in x:
+                        val = x['displayName']
+                    elif x.get('type') == 'doc':
                         val = extract_text(x)
+                    elif 'value' in x:
+                        val = x['value']
+                    elif 'name' in x:
+                        val = x['name']
                     else:
-                        val = x.get('value', x.get('name', str(x)))
+                        val = str(x)
                 elif isinstance(x, list):
                     parts = []
                     for it in x:
                         if isinstance(it, dict):
-                            if it.get('type') == 'doc':
+                            if 'displayName' in it:
+                                parts.append(it['displayName'])
+                            elif it.get('type') == 'doc':
                                 parts.append(extract_text(it))
+                            elif 'value' in it:
+                                parts.append(str(it['value']))
+                            elif 'name' in it:
+                                parts.append(str(it['name']))
                             else:
-                                parts.append(it.get('value', it.get('name', str(it))))
+                                parts.append(str(it))
                         else:
                             parts.append(str(it))
                     val = ','.join(parts)
@@ -227,3 +238,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+
