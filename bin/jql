@@ -9,6 +9,7 @@ Features:
   • Auto-cached field → API name map
   • Manual field aliases
   • Column header renaming
+  • Debug verbosity flags (--debug)
   • Query/row-count display flags
 
 Config dir ~/.jql-config/:
@@ -18,7 +19,11 @@ Config dir ~/.jql-config/:
 
 Usage:
   jql [-f fields] [-r] [-s SEP] [-n LIMIT] [-T TF]
-      [-q] [-c] [--list-fields [all|jira|custom|update]] <JQL>
+      [-q] [-c] [-d DEBUG_FLAGS]
+      [--list-fields [all|jira|custom|update]] <JQL>
+
+Debug flags (comma-separated):
+  keep-json-objects       show full JSON for complex fields
 """
 import os
 import sys
@@ -92,7 +97,6 @@ def extract_text(node):
 
 
 def fetch_id_map(api, auth):
-    """Return dict id->displayName from Jira."""
     try:
         r = requests.get(f"{api}/rest/api/3/field", auth=auth)
         if r.status_code != 200:
@@ -197,6 +201,11 @@ def main():
         help='Show row count below output'
     )
     parser.add_argument(
+        '-d', '--debug',
+        help='Comma-separated debug flags (e.g. keep-json-objects)',
+        default=''        
+    )
+    parser.add_argument(
         '--list-fields',
         nargs='?', const='all',
         choices=['all','jira','custom','update'],
@@ -207,6 +216,8 @@ def main():
         help='The JQL query to execute'
     )
     args = parser.parse_args()
+
+    debug_flags = [f.strip() for f in args.debug.split(',') if f.strip()]
 
     if args.list_fields:
         if args.list_fields == 'update':
@@ -228,7 +239,6 @@ def main():
         alias = it.strip()
         wrap = None
         trunc = None
-
         m1 = re.match(r'^(.+?)\((\d+)\)$', alias)
         m2 = re.match(r'^(.+?)\{(\d+)\}$', alias)
         if m1:
@@ -265,28 +275,31 @@ def main():
                 val = issue.get('key', '')
             else:
                 x = data.get(real, '')
-                if isinstance(x, dict):
-                    if 'displayName' in x:
-                        val = x['displayName']
-                    elif x.get('type') == 'doc':
-                        val = extract_text(x)
-                    else:
-                        val = x.get('value', x.get('name', str(x)))
-                elif isinstance(x, list):
-                    vals = []
-                    for it in x:
-                        if isinstance(it, dict):
-                            if 'displayName' in it:
-                                vals.append(it['displayName'])
-                            elif it.get('type') == 'doc':
-                                vals.append(extract_text(it))
-                            else:
-                                vals.append(it.get('value', it.get('name', str(it))))
-                        else:
-                            vals.append(str(it))
-                    val = ','.join(vals)
+                if 'json-objects' in debug_flags:
+                    val = json.dumps(x)
                 else:
-                    val = str(x)
+                    if isinstance(x, dict):
+                        if 'displayName' in x:
+                            val = x['displayName']
+                        elif x.get('type') == 'doc':
+                            val = extract_text(x)
+                        else:
+                            val = x.get('value', x.get('name', str(x)))
+                    elif isinstance(x, list):
+                        vals = []
+                        for it in x:
+                            if isinstance(it, dict):
+                                if 'displayName' in it:
+                                    vals.append(it['displayName'])
+                                elif it.get('type') == 'doc':
+                                    vals.append(extract_text(it))
+                                else:
+                                    vals.append(it.get('value', it.get('name', str(it))))
+                            else:
+                                vals.append(str(it))
+                        val = ','.join(vals)
+                    else:
+                        val = str(x)
             val = val.strip()
             row_r.append(val)
             if wrap is not None:
