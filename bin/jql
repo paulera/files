@@ -17,7 +17,7 @@ Fields syntax:
   - cf[n]: customfield_n via regex, not stored in cache
 
 Options:
-  -f, --fields      Fields list (default: issuekey,type,priority,status,summary)
+  -f, --fields      Fields list (default: key,issuetype,priority,status,summary,assignee)
   -r, --raw         Raw output: values separated by SEP
   -s, --sep SEP     Raw field separator (default: "|")
   -n, --limit LIMIT Max issues to fetch (default:100; -1 for all)
@@ -124,7 +124,7 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         description=__doc__
     )
-    parser.add_argument('-f', '--fields', default='issuekey,type,priority,status,summary')
+    parser.add_argument('-f', '--fields', default='key,issuetype,priority,status,summary,assignee')
     parser.add_argument('-r', '--raw', action='store_true')
     parser.add_argument('-s', '--sep', default='|')
     parser.add_argument('-n', '--limit', type=int, default=100)
@@ -165,7 +165,7 @@ def main():
             real = f"customfield_{mcf.group(1)}"
         else:
             real = amap.get(alias, alias)
-        display = alias if alias == 'issuekey' else next(
+        display = alias if alias == 'issuekey' or alias == 'key' else next(
             (k for k, v in amap.items() if v == real), alias
         )
         specs.append((real, wrap, trunc, display))
