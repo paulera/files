@@ -85,4 +85,4 @@ done
 sleep 2
 
 echo
-echo "Process complete!"§
+echo "Process complete!"

@@ -1,5 +1,28 @@
 # TODO: this function needs more love
+
 psaux() {
+
+colorize_ps_output() {
+  while IFS= read -r line; do
+    us=$(awk '{print $1}' <<< "$line")
+    pid=$(awk '{print $2}' <<< "$line")
+    cmd=$(awk '{$1=""; $2=""; sub(/^  */, ""); print}' <<< "$line")
+
+    # Color the user
+    if [[ "$user" == "root" ]]; then
+      user="${cRed}${user}${c0}"
+    else
+      user="${cGreen}${user}${c0}"
+    fi
+
+    # Color the PID
+    pid="${cYellow}${pid}${c0}"
+
+    # Print formatted output
+    printf "%s %s %s\n" "$user" "$pid" "$cmd"
+  done
+}
+
 
     if [ "$1" == "--help" ]; then
             printf "Usage: \n\n"
@@ -46,8 +69,8 @@ psaux() {
         fi
         echo
     else
-        result=$(ps aux | grep -v grep | grep -v psaux | grep $*)
-        echo "$result"
+        result=$(ps axo user,pid,command | grep -v psaux | grep -i $* | grep -v "grep -i $*")
+        echo -e "$result"
     fi
 
     export LAST_PSAUX_RESULT="$result"

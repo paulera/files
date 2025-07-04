@@ -1,0 +1,21 @@
+#!/bin/bash
+
+function command_exists() {
+    command -v "$1" &>/dev/null
+}
+
+
+echo -n "Homebrew: "
+if command_exists brew; then
+    printf "🟢 ${cGreen}Already installed${c0}\n"
+else
+    printf "▶️  Installing Homebrew\n"
+    /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+    if command_exists brew; then
+        printf "✅ ${cGreen}Installation successful!${c0}\n"
+    else
+        printf "⚠️  ${cRed}Installation failed${c0}\n"
+    fi
+fi
+
+

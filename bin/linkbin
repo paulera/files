@@ -29,7 +29,7 @@ fi
 if [ ! $2 ]; then
     file=$(basename $1)
     filename="${file%.*}"
-    linkname=${filename,,}
+    linkname=${filename}
 else
     linkname=$2
 fi

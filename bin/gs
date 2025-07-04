@@ -1,11 +1,20 @@
 #!/bin/bash
-echo
+
+# TODO: this script's loop can be improved a lot
+
+if [ -z $1 ]; then
+    printf "" > /tmp/files_that
+fi
+
 i=0
 while read -r l; do
 	((++i))
+    filename=$(echo $l | sed 's/^ *. *//')
 
 	if [ -z $1 ]; then
-
+        
+        echo $filename >> /tmp/files_that
+    
         type=$(echo $l | sed 's/^ *//' | awk '{ print $1; }')
         if [ "$type" == "D" ]; then
             echo -ne "${cRed}"
@@ -17,8 +26,16 @@ while read -r l; do
 	    echo -e "    ${i}\t${l}"
 	    echo -ne ${c0}
 	elif [ "$1" == "$i" ]; then
-		filename=$(echo $l | sed 's/^ *. *//')
+        if [ "$2" == "vim" ] || [ "$2" == "v" ] || [ "$2" == "edit" ] || [ "$2" == "ed" ]; then
+            # [ $# -eq 0 ] && set -- -; try if it fails for root
+            < /dev/tty vim -R $filename;
+            exit
+        elif [ "$2" == "file" ] || [ "$2" == "f" ] || [ "$2" == "?" ] || [ "$2" == "where" ]; then
+            echo $filename
+            exit
+        fi
 		git diff $filename
+		exit
 	fi
 done < <(git status -s);
 echo

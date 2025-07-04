@@ -1,4 +1,7 @@
 if [ "$OS" == "mac" ]; then
+    
+    PATH=$PATH:$FILESROOT/bin-mac
+    
     PATH_COREUTILS="/usr/local/opt/coreutils/libexec/gnubin/"
     PATH_COREUTILS_MAC="/opt/homebrew/opt/coreutils/libexec/gnubin/"
     if [ ! -d "${PATH_COREUTILS}" ] && [ ! -d "${PATH_COREUTILS_MAC}" ]; then

@@ -10,7 +10,7 @@ if [ -f "$1" ]; then
         done
     fi
 else
-    command -v curl >/dev/null && { curl -O "$1"; }
+    command -v curl >/dev/null && { curl $1 -o "$1"; }
 fi
 
 
