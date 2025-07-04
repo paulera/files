@@ -34,8 +34,16 @@ make_bar() {
     say "${__wh}]"
 }
 
-read -r MEM_TOTAL MEM_USED MEM_FREE <<< $(free -m -h | awk 'NR==2 { print $2, $3, $4 }')
-MEM_USED_PERC=$(free -m | awk 'NR==2 { printf "%.2f", 100*$3/$2 }')
+if [ "$OS" == "mac" ]; then
+    MEM_TOTAL=$(sysctl -n hw.memsize | awk '{print $1 / 1024 / 1024}')
+    MEM_FREE=$(vm_stat | awk '/Pages free/ {print $3 * 4096 / 1024 / 1024}')
+    MEM_USED=$(echo "$MEM_TOTAL - $MEM_FREE" | bc)
+    MEM_USED_PERC=$(echo "100 * $MEM_USED / $MEM_TOTAL" | bc)
+else
+    # *nix / gnu based
+    read -r MEM_TOTAL MEM_USED MEM_FREE <<< $(free -m -h | awk 'NR==2 { print $2, $3, $4 }')
+    MEM_USED_PERC=$(free -m | awk 'NR==2 { printf "%.2f", 100*$3/$2 }')
+fi
 say "Memory $(make_bar ${MEM_USED_PERC}) ${__ga}${MEM_USED_PERC}% ($MEM_USED out of $MEM_TOTAL)"
 
 echo ""

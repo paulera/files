@@ -6,4 +6,4 @@ if [ -z "$1" ]; then
     exit 1
 fi
 
-find . -type f -iname "*$1*"
+find . -type f -iname "*$1*" | grep --color=yes -e "$1\|$"

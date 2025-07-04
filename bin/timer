@@ -1,0 +1,75 @@
+#!/bin/bash
+
+# This timer is bugged. It delays a couple milisseconds to render the text, which
+# overtime accumulates and makes the timer delay.
+# Currently the rendering time is adding on top of the 1 seconds.
+# The right approach would be to calculate what is the target time and
+# display the difference between now and target time, instead of count down with
+# the sleep 1 command
+
+#seconds=$(($1))
+
+minutes=$1
+
+if [ -z $1 ]; then
+    minutes=15
+else
+    minutes=$1
+fi
+
+seconds=$(echo 60 $minutes |  awk '{ printf "%4.0f\n", $1*$2 }')
+
+time=$seconds
+
+# roman
+# nancij
+# letters
+# eftiwall - faces
+
+font_face="colossal"
+
+[ $(command -v figlet) ] && figlet=1 || figlet=0
+
+time_up=0
+time_modifier=-1
+
+while : ; do
+
+    if (( $time_up == 0)); then
+        if (( $time < 10 )); then
+            echo -ne ${cRed}
+            message="FINISH"
+        elif (( $time < 30)); then
+            echo -ne ${cYellow}
+            message="H U R R Y   U P   !"
+        elif (( $time < 60)); then
+            echo -ne ${cCyan}
+            message="L A S T   M I N U T E"
+        else
+            echo -ne ${cWhite}
+            message="C O U N T D O W N"
+            message=""
+        fi
+    else
+        echo -ne "\033[1;33m"
+        echo -ne "\033[1;41m"
+        message="T I M E   IS   U P   !"
+    fi
+
+    time_str=$(date -d@$((-3600 + $time)) "+%M:%S" | sed 's/./& /g')
+    clear
+    echo
+    echo
+    figlet -f eftifont "            $message"
+    echo
+    figlet -f $font_face "    $time_str"
+    
+    sleep 1
+    time=$(( time + time_modifier ))
+
+    if (( $time == 0 )); then
+        time_up=1;
+        time_modifier=+1;
+    fi
+
+done

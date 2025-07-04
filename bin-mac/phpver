@@ -1,48 +1,9 @@
 #!/bin/bash
 
-CURRENT_VERSION=$(php --version | head -n 1 | cut -d\  -f2)
-echo
-echo -e "Current PHP verson in use: ${cCyan}${CURRENT_VERSION}${c0}"
-echo
-echo "Choose a version to switch to, or CTRL+C to abort"
-
-CURRENT_VERSION_MINOR=$(echo ${CURRENT_VERSION} | sed 's/\([0-9]*.[0-9]*\).*/\1/g')
-
-menu OPTION $(ls -1 /opt/homebrew/etc/php/ | grep -v ${CURRENT_VERSION_MINOR})
-
-if [ -z "${OPTION}" ]; then
-    exit 1
+if [ "${OS}" = "mac" ]; then
+    $FILESROOT/bin-mac/phpver $*
+    exit $?
 fi
 
-echo
-echo -e "Unlinking current php version ${cCyan}${CURRENT_VERSION_MINOR}${c0}"
-brew unlink php@${CURRENT_VERSION_MINOR}
-
-echo
-echo -e "Linking version ${cCyan}${OPTION}${c0} ... "
-brew link php@${OPTION}
-
-NEW_VERSION_MINOR=$(php --version | head -n 1 | cut -d\  -f2 | sed 's/\([0-9]*.[0-9]*\).*/\1/g')
-
-echo
-if [ "${NEW_VERSION_MINOR}" == "${OPTION}" ]; then
-    echo -e "${cGreen}Successfuly changed ${CURRENT_VERSION_MINOR} -> ${NEW_VERSION_MINOR}${c0}"
-    COLOR="1;32"
-else
-    echo -e "${cRed}Failed to switch version${c0}"
-    COLOR="1;31"
-fi
-
-if ! command -v php &> /dev/null; then
-    echo "The php link is broken and the command won't work now."
-    echo -e "To fix it manually, check ${cCyan}/opt/homebrew/etc/php${c0} for"
-    echo "available php versions and run:"
-    echo -e "    ${cYellow}brew unlink php;${c0}"
-    echo -e "    ${cYellow}brew link php@X.Y;${c0}"
-    echo
-    exit 1
-fi
-
-echo
-php --version | GREP_COLOR="${COLOR}" grep --color=auto "^PHP [.0-9]* \|$"
-echo
+echo -e "${cRed}error:${c0} PHPVER is not ported for the operating sysmtem ${cCyan}${OS}${c0}".
+echo "Go ahead, implement it."
