@@ -1,0 +1,21 @@
+#!/bin/bash
+
+if [ ! -z "$1" ]; then
+    if [ "$2" == "who" ]; then
+        $1 --raw -f k,summary,assignee | jiralink
+    else
+        $1 --raw -f k,summary | jiralink
+    fi
+else
+    cat | \
+    sed 's/\[/ /g' | \
+    sed 's/\]/ - /g' | \
+    sed 's/\| /\|/g' | \
+    tr -s ' ' | \
+    awk -F\| '{
+        printf "[\["$1"\] "$2"]"
+        printf "(https://draad.atlassian.net/browse/"$1")"
+        if ($3) printf " @"$3
+        printf "\n"
+    }'
+fi
