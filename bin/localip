@@ -1,3 +1,0 @@
-#/bin/bash
-IP=`ifconfig | grep 'inet addr' | awk '{ print $2; }' | awk -F: '{ print $2; }' | grep -v 127.0.0.1`
-echo $IP
