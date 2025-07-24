@@ -1,0 +1,16 @@
+#!/bin/bash
+
+if [ -z $1 ] || [ "$1" == "--help" ] || [ "$1" == "-h" ]; then
+    echo "Usage: $(basename $0) <slack token>"
+    echo "Tests a Slack Token by trying authenticating to"
+    echo "https://slack.com/api/auth.test"
+    echo
+    echo "Tokens have the format xoxp-... or xoxb-..."
+    echo "Slack Apps url: https://api.slack.com/apps"
+    echo
+    exit
+fi
+
+TOKEN=$1
+curl -H "Authorization: Bearer ${TOKEN}" https://slack.com/api/auth.test
+

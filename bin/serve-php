@@ -1,0 +1,35 @@
+#!/bin/sh
+
+PORT="8080";
+IP="127.0.0.1";
+
+if [ ! -z $1 ]; then
+    
+    if [[ "$1" =~ "[0-9]+" ]]; then
+        PORT=$1;
+    elif [ "$1" == "--help" ]; then
+        echo "Usage: $( basename $0 ) [PORT]"
+        echo "Starts a PHP server listening at the specified port"
+        echo "(or ${PORT} by default) and serving the current folder";
+        exit 1;
+    fi
+
+fi
+
+printf "Serving ${cWhite}$PWD${c0} on ${cWhite}http://$IP:${cGreen}$PORT${c0} ...\n"
+
+BROWSER_CMD=""
+if [ "$OS" == "mac" ]; then
+    BROWSER_CMD="open http://$IP:$PORT"
+elif [ "$OS" == "win" ]; then
+    BROWSER_CMD="start http://$IP:$PORT"
+elif [ "$OS" == "linux" ] || [ "$OS" == "cygwin" ]; then
+    BROWSER_CMD="xdg-open http://$IP:$PORT"
+fi
+
+if [ ! -z "$BROWSER_CMD" ]; then
+    sleep 1 && $BROWSER_CMD &
+fi
+
+php -S 127.0.0.1:$PORT -t .
+
