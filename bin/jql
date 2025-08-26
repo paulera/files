@@ -167,8 +167,8 @@ def main():
     )
     parser.add_argument(
         '-f', '--fields',
-        default='key,issuetype,priority,status,summary,assignee',
-        help='Fields list (default: key,issuetype,priority,status,summary,assignee)'
+        default='key,issuetype(15),priority,status(15),summary(30),assignee(15)',
+        help='Fields list (default: key,issuetype(15),priority,status(15),summary(30),assignee(15))'
     )
     parser.add_argument(
         '-r', '--raw',
