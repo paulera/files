@@ -22,6 +22,18 @@ Usage:
       [-q] [-c] [-d DEBUG_FLAGS]
       [--list-fields [all|jira|custom|update]] <JQL>
 
+Jira OAuth 2.0 scopes required:
+    Classic:    read:jira-work
+    Granular:   read:issue-details:jira
+                read:audit-log:jira
+                read:avatar:jira
+                read:field-configuration:jira
+                read:issue-meta:jira
+                read:field.default-value:jira
+                read:field.option:jira
+                read:field:jira
+                read:group:jira
+
 Debug flags (comma-separated):
   keep-json-objects       show full JSON for complex fields
 """
@@ -260,7 +272,7 @@ def main():
 
         specs.append((real, wrap, trunc, header))
 
-    url = f"{api}/rest/api/3/search"
+    url = f"{api}/rest/api/3/search/jql"
     params = {'jql': ' '.join(args.jql), 'fields': ','.join(r for r,_,_,_ in specs)}
     issues = fetch_issues(url, auth, params, args.limit)
 
