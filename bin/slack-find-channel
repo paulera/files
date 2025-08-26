@@ -1,0 +1,24 @@
+#!/bin/bash
+
+CHANNELS_FILE=~/.slack-channels.txt
+
+: "${SLACK_TOKEN:?missing SLACK_TOKEN}"
+
+if [ ! -f "${CHANNELS_FILE}" ]; then
+    touch ${CHANNELS_FILE}
+    while :; do
+        resp="$(curl -s -H "Authorization: Bearer $SLACK_TOKEN" \
+            "https://slack.com/api/conversations.list?types=public_channel,private_channel&exclude_archived=true&limit=1000&cursor=${cursor}")"
+
+        jq -r '.channels[] | .name + ":" + .id' <<<"$resp" >>"${CHANNELS_FILE}"
+
+        cursor="$(jq -r '.response_metadata.next_cursor // ""' <<<"$resp")"
+        [[ -z "$cursor" ]] && break
+    done 
+fi
+
+if [ ! -z "$1" ]; then
+    cat ${CHANNELS_FILE} | grep -i $1 | awk -F: '{ print $2; }'
+else
+    cat ${CHANNELS_FILE}
+fi

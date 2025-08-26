@@ -3,10 +3,11 @@
 PORT="8080";
 IP="127.0.0.1";
 
-if [ ! -z $1 ]; then
+if [ ! -z "$1" ]; then
     
-    if [[ "$1" =~ "[0-9]+" ]]; then
+    if [[ "$1" =~ ^[0-9]+$ ]]; then
         PORT=$1;
+        echo $PORT
     elif [ "$1" == "--help" ]; then
         echo "Usage: $( basename $0 ) [PORT]"
         echo "Starts a PHP server listening at the specified port"
