@@ -1,0 +1,13 @@
+#!/bin/bash
+
+EXTENSION_DIR=$(php-config --extension-dir)
+if [ "$(php --version | head -n 1 | cut -d. -f1 | cut -d\  -f2)" == "5" ]; then
+    XDEBUG_FILE=$FILESROOT/resources/xdebug2.ini
+else
+    XDEBUG_FILE=$FILESROOT/resources/xdebug3.ini
+fi
+echo ${XDEBUG_FILE}
+php -c ${XDEBUG_FILE} -d extension_dir=$EXTENSION_DIR "$@"
+
+#php -S 127.0.0.1:$PORT -t .
+
