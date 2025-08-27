@@ -32,5 +32,19 @@ if [ ! -z "$BROWSER_CMD" ]; then
     sleep 1 && $BROWSER_CMD &
 fi
 
-php -S 127.0.0.1:$PORT -t .
+EXTENSION_DIR=$(php-config --extension-dir)
+if [ "$(php --version | head -n 1 | cut -d. -f1 | cut -d\  -f2)" == "5" ]; then
+    XDEBUG_FIlE=$FILESROOT/resources/xdebug2.ini
+else
+    XDEBUG_FIlE=$FILESROOT/resources/xdebug3.ini
+fi
+
+printf "xdebug config to inject: ${cGreen}${XDEBUG_FIlE}${c0}\n"
+
+php \
+-c ${XDEBUG_FIlE} \
+-d extension_dir=$EXTENSION_DIR \
+-S 127.0.0.1:$PORT -t .
+
+#php -S 127.0.0.1:$PORT -t .
 
