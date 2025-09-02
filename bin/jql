@@ -71,24 +71,35 @@ def get_color(field, value):
 
     if field == 'status':
         if value == 'done':
-            fg = Fore.LIGHTGREEN_EX
+            fg = Style.BRIGHT + Fore.LIGHTWHITE_EX
+            bg = Back.GREEN
         elif value == 'discarded':
-            fg = Fore.GREEN
-        elif value in ('to do', 'backlog'):
+            fg = Fore.BLACK
+            bg = Back.GREEN
+        elif value == 'backlog':
+            fg = Fore.BLACK
+            bg = Back.LIGHTBLACK_EX
+        elif value == 'to do':
             fg = Fore.LIGHTWHITE_EX
             bg = Back.LIGHTBLACK_EX
         elif value == 'blocked':
-            fg = Fore.WHITE
-            bg = Back.MAGENTA
+            fg = Fore.BLACK
+            bg = Back.LIGHTYELLOW_EX
+        elif value == 'on production':
+            fg = Style.BRIGHT + Fore.LIGHTGREEN_EX
+            bg = Back.BLUE
         else:
-            fg = Fore.LIGHTBLUE_EX
+            fg = Fore.LIGHTWHITE_EX
+            bg = Back.BLUE
     elif field in ('issuetype', 'type'):
         if value == 'task':
-            fg = Fore.CYAN
+            fg = Fore.LIGHTCYAN_EX
         elif value == 'story':
-            fg = Fore.GREEN
+            fg = Fore.LIGHTGREEN_EX
         elif value == 'bug':
-            fg = Fore.MAGENTA
+            fg = Fore.LIGHTRED_EX
+        elif value == 'epic':
+            fg = Fore.LIGHTMAGENTA_EX
     elif field == 'priority':
         if value in ('lowest', 'low'):
             fg = Fore.LIGHTBLACK_EX
@@ -100,7 +111,10 @@ def get_color(field, value):
             fg = Fore.LIGHTYELLOW_EX
     elif field == 'assignee':
         if value == 'none':
-            fg = Fore.LIGHTBLACK_EX
+            fg = Style.BRIGHT + Fore.LIGHTBLACK_EX
+    elif field == 'key':
+        fg = Style.BRIGHT + Fore.LIGHTWHITE_EX
+
     return fg, bg
 
 # ---------------------------------------------------------------------------
