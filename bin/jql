@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-# AI-MADE
-# https://chatgpt.com/share/68652076-c23c-800f-9cc5-cfff4a7a1616
+# Built with AI assistance. Started from https://chatgpt.com/share/68652076-c23c-800f-9cc5-cfff4a7a1616
+# then continued with copilot and manual edits.
 """
 CLI tool to run JQL queries against Jira, with table or raw output.
 
@@ -56,7 +56,6 @@ RENAME_FILE = os.path.join(CONFIG_DIR, "columns-rename.json")
 CF_RE = re.compile(r'^cf\[(\d+)\]$')
 
 # --- Color support ----------------------------------------------------------
-colorama_init(autoreset=False)  # initialize colorama once
 
 def get_color(field, value):
     """
@@ -288,15 +287,30 @@ def main():
         help='List fields or update cache'
     )
     parser.add_argument(
-        '--no-color',
-        action='store_true',
-        help='Disable colored output'
+        '--color',
+        choices=['never', 'always', 'auto'],
+        default='auto',
+        help='Color output: never, always, auto (default: auto)'
     )
     parser.add_argument(
         'jql', nargs='*',
         help='The JQL query to execute'
     )
     args = parser.parse_args()
+
+    # Determine color usage
+    if args.color == 'always':
+        use_color = True
+    elif args.color == 'never':
+        use_color = False
+    else:  # auto
+        use_color = sys.stdout.isatty()
+
+    # Ensure colorama does not strip ANSI codes when --color=always
+    if use_color:
+        colorama_init(autoreset=False, strip=False, convert=False)
+    else:
+        colorama_init(autoreset=False, strip=True, convert=True)
 
     debug_flags = [f.strip() for f in args.debug.split(',') if f.strip()]
 
@@ -391,7 +405,7 @@ def main():
             else:
                 display_val = val
             # apply color if enabled
-            if not args.no_color:
+            if use_color:
                 fg, bg = get_color(header, val)
                 if fg or bg:
                     codes = (fg or '') + (bg or '')
@@ -405,14 +419,21 @@ def main():
             print(args.sep.join(r))
     else:
         if args.show_query:
-            print(f"\n{Style.BRIGHT}{Fore.YELLOW}{' '.join(args.jql)}{Style.RESET_ALL}\n")
-        if args.no_color:
-            headers = [h for _,_,_,h in specs]
-        else:
+            if use_color:
+                print(f"\n{Style.BRIGHT}{Fore.YELLOW}{' '.join(args.jql)}{Style.RESET_ALL}\n")
+            else:
+                print(f"\n{' '.join(args.jql)}\n")
+        if use_color:
             headers = [f"{Style.BRIGHT}{Fore.WHITE}{h}{Style.RESET_ALL}" for _,_,_,h in specs]
+        else:
+            headers = [h for _,_,_,h in specs]
         print(tabulate(rows_vis, headers=headers, tablefmt=args.tablefmt))
         if args.show_rows_count:
-            print(f"\n{Style.BRIGHT}{Fore.WHITE}{len(issues)} rows{Style.RESET_ALL}\n")
+            if use_color:
+                print(f"\n{Style.BRIGHT}{Fore.WHITE}{len(issues)} rows{Style.RESET_ALL}\n")
+            else:
+                print(f"\n{len(issues)} rows\n")
 
 if __name__ == '__main__':
+    main()
     main()
