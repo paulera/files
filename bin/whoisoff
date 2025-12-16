@@ -1,0 +1,72 @@
+#!/bin/bash
+
+#Source: ChatGPT - https://chatgpt.com/share/69414cc8-ceec-800f-9bf5-c5256020df3c
+set -euo pipefail
+
+# Usage:
+#   curl -fsSL ... | ./whoisoff
+#   curl -fsSL ... | ./whoisoff 2025-06-26
+#
+# Notes:
+# - Argument (optional): YYYY-MM-DD
+# - If omitted, uses current date in Europe/Malta
+# - DTEND is treated as exclusive (iCalendar spec)
+
+TZ_OVERRIDE="${TZ_OVERRIDE:-Europe/Malta}"
+
+if [[ "${1:-}" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
+  TODAY="${1//-/}"
+else
+  TODAY="$(TZ="$TZ_OVERRIDE" date +%Y%m%d)"
+fi
+
+cat | awk -v today="$TODAY" '
+  function flush_event() {
+    if (!in_event) return
+
+    sd = start
+    ed = end
+
+    if (match(sd, /^[0-9]{8}/)) sd = substr(sd, 1, 8)
+    if (match(ed, /^[0-9]{8}/)) ed = substr(ed, 1, 8)
+
+    # All-day semantics: start <= today < end
+    if (sd != "" && ed != "" && sd <= today && today < ed) {
+      name = summary
+      sub(/[[:space:]]*-[[:space:]].*$/, "", name)
+
+      if (name == "") name = "(unknown)"
+      if (category == "") category = "Unspecified"
+
+      key = name "||" category
+      if (!seen[key]++) {
+        printf "%s\t%s\t%s..%s\n", name, category, sd, ed
+      }
+    }
+  }
+
+  BEGIN { in_event = 0 }
+
+  /^BEGIN:VEVENT/ {
+    flush_event()
+    in_event = 1
+    start = end = summary = category = ""
+    next
+  }
+
+  /^END:VEVENT/ {
+    flush_event()
+    in_event = 0
+    next
+  }
+
+  in_event {
+    if ($0 ~ /^DTSTART/)    { sub(/.*:/, "", $0); start = $0 }
+    else if ($0 ~ /^DTEND/) { sub(/.*:/, "", $0); end   = $0 }
+    else if ($0 ~ /^SUMMARY:/)    { sub(/^SUMMARY:/, "", $0); summary  = $0 }
+    else if ($0 ~ /^CATEGORIES:/) { sub(/^CATEGORIES:/, "", $0); category = $0 }
+  }
+
+  END { flush_event() }
+' | LC_ALL=C sort -f
+
