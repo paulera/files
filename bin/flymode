@@ -30,7 +30,7 @@ else
   PROMPT_COMMAND="$PROMPT_COMMAND; timer_stop"
 fi
 
-PS1="\[\e[1;34;40m\]"'"'"'${timer_show}'"'"'"\[\e[1;34;40m\]> \[\e[m\]"
+PS1="\n\[\e[1;34;40m\]"'"'"'${timer_show}'"'"'"\[\e[1;34;40m\]> \[\e[m\]"
 
 sPS1="\[\e[1;34;40m\]${timer_show}\[\e[1;34;40m\]> \[\e[m\]";
 shopt -s checkwinsize;
