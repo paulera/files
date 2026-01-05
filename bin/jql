@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-# Built with AI assistance. Started from https://chatgpt.com/share/68652076-c23c-800f-9cc5-cfff4a7a1616
-# then continued with copilot and manual edits.
+# AI-MADE
+# https://chatgpt.com/share/68652076-c23c-800f-9cc5-cfff4a7a1616
 """
 CLI tool to run JQL queries against Jira, with table or raw output.
 
@@ -46,7 +46,6 @@ import re
 import textwrap
 from requests.auth import HTTPBasicAuth
 from tabulate import tabulate
-from colorama import Fore, Back, Style, init as colorama_init  # added
 
 # Constants
 CONFIG_DIR = os.path.expanduser("~/.jql-config")
@@ -55,68 +54,6 @@ ALIASES_FILE = os.path.join(CONFIG_DIR, "fields-aliases.json")
 RENAME_FILE = os.path.join(CONFIG_DIR, "columns-rename.json")
 CF_RE = re.compile(r'^cf\[(\d+)\]$')
 
-# --- Color support ----------------------------------------------------------
-
-def get_color(field, value):
-    """
-    Return (fg, bg) ANSI codes (or (None, None)) for a given field/value pair.
-    field: logical/display field name (case-insensitive)
-    value: already stringified value
-    """
-    field = (field or '').strip().lower()
-    value = (value or '').strip().lower()
-    fg = None
-    bg = None
-
-    if field == 'status':
-        if value == 'done':
-            fg = Style.BRIGHT + Fore.LIGHTWHITE_EX
-            bg = Back.GREEN
-        elif value == 'discarded':
-            fg = Fore.BLACK
-            bg = Back.GREEN
-        elif value == 'backlog':
-            fg = Fore.BLACK
-            bg = Back.LIGHTBLACK_EX
-        elif value == 'to do':
-            fg = Fore.LIGHTWHITE_EX
-            bg = Back.LIGHTBLACK_EX
-        elif value == 'blocked':
-            fg = Fore.BLACK
-            bg = Back.LIGHTYELLOW_EX
-        elif value == 'on production':
-            fg = Style.BRIGHT + Fore.LIGHTGREEN_EX
-            bg = Back.BLUE
-        else:
-            fg = Fore.LIGHTWHITE_EX
-            bg = Back.BLUE
-    elif field in ('issuetype', 'type'):
-        if value == 'task':
-            fg = Fore.LIGHTCYAN_EX
-        elif value == 'story':
-            fg = Fore.LIGHTGREEN_EX
-        elif value == 'bug':
-            fg = Fore.LIGHTRED_EX
-        elif value == 'epic':
-            fg = Fore.LIGHTMAGENTA_EX
-    elif field == 'priority':
-        if value in ('lowest', 'low'):
-            fg = Fore.LIGHTBLACK_EX
-        elif value == 'medium':
-            fg = Fore.WHITE
-        elif value == 'high':
-            fg = Fore.YELLOW
-        elif value == 'highest':
-            fg = Fore.LIGHTYELLOW_EX
-    elif field == 'assignee':
-        if value == 'none':
-            fg = Style.BRIGHT + Fore.LIGHTBLACK_EX
-    elif field == 'key':
-        fg = Style.BRIGHT + Fore.LIGHTWHITE_EX
-
-    return fg, bg
-
-# ---------------------------------------------------------------------------
 # Helpers
 
 def ensure_config_dir():
@@ -141,23 +78,44 @@ def save_json(path, obj):
 
 def fetch_issues(url, auth, params, limit):
     issues = []
-    start = 0
     page = 100 if limit < 0 else min(limit, 100)
+    next_page_token = None
+    
     while True:
-        params.update({'startAt': start, 'maxResults': page})
-        r = requests.get(url, auth=auth, params=params)
+        current_params = params.copy()
+        current_params['maxResults'] = page
+        if next_page_token:
+            current_params['nextPageToken'] = next_page_token
+        
+        r = requests.get(url, auth=auth, params=current_params)
         if r.status_code != 200:
             sys.exit(f"Error: {r.status_code} {r.text}")
-        batch = r.json().get('issues', [])
+        
+        data = r.json()
+        batch = data.get('issues', [])
         if not batch:
             break
+        
         issues.extend(batch)
+        
         if limit >= 0 and len(issues) >= limit:
             issues = issues[:limit]
             break
-        if len(batch) < page:
+        
+        # Check if there are more results using isLast
+        if data.get('isLast', True):
             break
-        start += page
+        
+        # Get next page token for pagination
+        next_page_token = data.get('nextPageToken')
+        if not next_page_token:
+            break
+        
+        # Adjust page size if we're close to the limit
+        if limit >= 0:
+            remaining = limit - len(issues)
+            page = min(page, remaining)
+    
     return issues
 
 
@@ -287,30 +245,10 @@ def main():
         help='List fields or update cache'
     )
     parser.add_argument(
-        '--color',
-        choices=['never', 'always', 'auto'],
-        default='auto',
-        help='Color output: never, always, auto (default: auto)'
-    )
-    parser.add_argument(
         'jql', nargs='*',
         help='The JQL query to execute'
     )
     args = parser.parse_args()
-
-    # Determine color usage
-    if args.color == 'always':
-        use_color = True
-    elif args.color == 'never':
-        use_color = False
-    else:  # auto
-        use_color = sys.stdout.isatty()
-
-    # Ensure colorama does not strip ANSI codes when --color=always
-    if use_color:
-        colorama_init(autoreset=False, strip=False, convert=False)
-    else:
-        colorama_init(autoreset=False, strip=True, convert=True)
 
     debug_flags = [f.strip() for f in args.debug.split(',') if f.strip()]
 
@@ -365,7 +303,7 @@ def main():
         row_r = []
         row_v = []
         data = issue.get('fields', {})
-        for real, wrap, trunc, header in specs:
+        for real, wrap, trunc, _ in specs:
             if real in ['key','issuekey']:
                 val = issue.get('key', '')
             else:
@@ -397,20 +335,12 @@ def main():
                         val = str(x)
             val = val.strip()
             row_r.append(val)
-            # wrapping / truncation
             if wrap is not None:
-                display_val = textwrap.fill(val, width=wrap)
+                row_v.append(textwrap.fill(val, width=wrap))
             elif trunc is not None:
-                display_val = val[:trunc].strip()
+                row_v.append(val[:trunc].strip())
             else:
-                display_val = val
-            # apply color if enabled
-            if use_color:
-                fg, bg = get_color(header, val)
-                if fg or bg:
-                    codes = (fg or '') + (bg or '')
-                    display_val = f"{codes}{display_val}{Style.RESET_ALL}"
-            row_v.append(display_val)
+                row_v.append(val)
         rows_raw.append(row_r)
         rows_vis.append(row_v)
 
@@ -419,20 +349,11 @@ def main():
             print(args.sep.join(r))
     else:
         if args.show_query:
-            if use_color:
-                print(f"\n{Style.BRIGHT}{Fore.YELLOW}{' '.join(args.jql)}{Style.RESET_ALL}\n")
-            else:
-                print(f"\n{' '.join(args.jql)}\n")
-        if use_color:
-            headers = [f"{Style.BRIGHT}{Fore.WHITE}{h}{Style.RESET_ALL}" for _,_,_,h in specs]
-        else:
-            headers = [h for _,_,_,h in specs]
+            print(f"\n\033[1;33m{' '.join(args.jql)}\033[0m\n")
+        headers = [f"\033[1;37m{h}\033[0m" for _,_,_,h in specs]
         print(tabulate(rows_vis, headers=headers, tablefmt=args.tablefmt))
         if args.show_rows_count:
-            if use_color:
-                print(f"\n{Style.BRIGHT}{Fore.WHITE}{len(issues)} rows{Style.RESET_ALL}\n")
-            else:
-                print(f"\n{len(issues)} rows\n")
+            print(f"\n\033[1;37m{len(issues)} rows\033[0m\n")
 
 if __name__ == '__main__':
     main()
