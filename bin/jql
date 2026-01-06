@@ -70,7 +70,7 @@ def get_color(field, value):
     """
     fg = ''
     bg = ''
-    
+
     if field == 'status':
         if value == 'done':
             fg = Style.BRIGHT + Fore.LIGHTWHITE_EX
@@ -279,8 +279,8 @@ def main():
     )
     parser.add_argument(
         '-n', '--limit',
-        type=int, default=100,
-        help='Max issues to fetch (default: 100; -1 for all)'
+        type=int, default=1000,
+        help='Max issues to fetch (default: 1000; -1 for all)'
     )
     parser.add_argument(
         '-T', '--tablefmt',
