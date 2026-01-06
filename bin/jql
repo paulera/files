@@ -70,7 +70,7 @@ def get_color(field, value):
     """
     fg = ''
     bg = ''
-
+    
     if field == 'status':
         if value == 'done':
             fg = Style.BRIGHT + Fore.LIGHTWHITE_EX
@@ -97,6 +97,15 @@ def get_color(field, value):
             fg = Fore.LIGHTBLUE_EX
         elif value == 'lowest':
             fg = Style.DIM + Fore.LIGHTBLUE_EX
+    elif field == 'issue type':
+        if value == 'task':
+            fg = Style.BRIGHT + Fore.LIGHTBLUE_EX
+        elif value == 'story':
+            fg = Style.BRIGHT + Fore.LIGHTGREEN_EX
+        elif value == 'bug':
+            fg = Style.BRIGHT + Fore.LIGHTRED_EX
+        elif value == 'epic':
+            fg = Style.BRIGHT + Fore.LIGHTMAGENTA_EX
 
     return fg, bg
 
