@@ -1,0 +1,31 @@
+#!/bin/bash
+
+get_state() {
+    if [ "$(pmset -g | grep "SleepDisabled" | awk '{ print $2; }')" == "1" ]; then
+        echo "on"
+    else
+        echo "off"
+    fi
+}
+
+if [ "${1}" == "--help" ]; then
+    echo "$( basename $0 ) [VALUE]"
+    echo "      1, true, on     Keep display always on (sudo)"
+    echo "      0, false, off   Allow display to sleep (sudo)"
+    echo "      no params       Show current state"
+    echo "      --help          Displays this message"
+    echo
+elif [ "${1}" == "1" ] || [ "${1}" == "true" ] || [ "${1}" == "on" ]; then
+    sudo pmset -a disablesleep 1
+    echo "1: 🖥️  Display always on"
+elif [ "${1}" == "0" ] || [ "${1}" == "false" ] || [ "${1}" == "off" ]; then
+    sudo pmset -a disablesleep 0
+    echo "0: 💤 Display can sleep"
+else
+    STATE=$(get_state)
+    if [ "${STATE}" == "on" ]; then
+        echo "1: 🖥️  Display always on"
+    else
+        echo "0: 💤 Display can sleep"
+    fi
+fi
