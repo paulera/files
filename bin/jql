@@ -298,6 +298,11 @@ def main():
         help='Show row count below output'
     )
     parser.add_argument(
+        '-m', '--numbers',
+        action='store_true',
+        help='Add row numbers as first column'
+    )
+    parser.add_argument(
         '--color',
         choices=['auto', 'always', 'never'],
         default='auto',
@@ -437,7 +442,14 @@ def main():
             headers = [f"{Style.BRIGHT}{Fore.WHITE}{h}{Style.RESET_ALL}" for _,_,_,h in specs]
         else:
             headers = [h for _,_,_,h in specs]
-        print(tabulate(rows_vis, headers=headers, tablefmt=args.tablefmt))
+        if args.numbers:
+            rows_vis = [[str(i+1)] + r for i, r in enumerate(rows_vis)]
+            headers = ['#'] + headers
+        print(tabulate(
+            rows_vis,
+            headers=headers,
+            tablefmt=args.tablefmt
+        ))
         if args.show_rows_count:
             if use_color:
                 print(f"\n{Style.BRIGHT}{Fore.WHITE}{len(issues)} rows{Style.RESET_ALL}\n")
