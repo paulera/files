@@ -247,6 +247,19 @@ def list_fields(api, auth, category):
 
 # Load maps
 
+# Load maps
+
+class _Reversed:
+    """Wrapper that inverts comparison order, used for per-column descending sort."""
+    __slots__ = ('val',)
+    def __init__(self, val): self.val = val
+    def __lt__(self, o): return self.val > o.val
+    def __le__(self, o): return self.val >= o.val
+    def __gt__(self, o): return self.val < o.val
+    def __ge__(self, o): return self.val <= o.val
+    def __eq__(self, o): return self.val == o.val
+
+
 def load_maps():
     field_map = load_json(CACHE_FILE) or {}
     alias_map = load_json(ALIASES_FILE) or {}
@@ -309,6 +322,11 @@ def main():
         help='When to use colors: auto (default), always, or never'
     )
     parser.add_argument(
+        '-o', '--order',
+        default='',
+        help='Sort by fields (comma-separated, prefix - for descending, e.g. -o status,-priority)'
+    )
+    parser.add_argument(
         '-d', '--debug',
         help='Comma-separated debug flags (e.g. keep-json-objects)',
         default=''        
@@ -366,10 +384,10 @@ def main():
         default_header = id_map.get(real, real)
         header = col_rename.get(default_header, default_header)
 
-        specs.append((real, wrap, trunc, header))
+        specs.append((alias, real, wrap, trunc, header))
 
     url = f"{api}/rest/api/3/search/jql"
-    params = {'jql': ' '.join(args.jql), 'fields': ','.join(r for r,_,_,_ in specs)}
+    params = {'jql': ' '.join(args.jql), 'fields': ','.join(r for _,r,_,_,_ in specs)}
     issues = fetch_issues(url, auth, params, args.limit)
 
     rows_raw = []
@@ -382,7 +400,7 @@ def main():
         row_r = []
         row_v = []
         data = issue.get('fields', {})
-        for real, wrap, trunc, _ in specs:
+        for _, real, wrap, trunc, _ in specs:
             if real in ['key','issuekey']:
                 val = issue.get('key', '')
             else:
@@ -429,6 +447,38 @@ def main():
         rows_raw.append(row_r)
         rows_vis.append(row_v)
 
+    if args.order:
+        order_keys = []
+        for token in args.order.split(','):
+            token = token.strip()
+            if not token:
+                continue
+            desc = token.startswith('-')
+            fname = token.lstrip('-').strip().lower()
+            col_idx = None
+            for i, (alias, real, wrap, trunc, header) in enumerate(specs):
+                if alias.lower() == fname or header.lower() == fname:
+                    col_idx = i
+                    break
+            if col_idx is None:
+                sys.exit(f"Error: sort field '{fname}' not found in output fields")
+            order_keys.append((col_idx, desc))
+
+        def _sort_key(pair):
+            row_r = pair[0]
+            key = []
+            for col_idx, desc in order_keys:
+                val = row_r[col_idx]
+                try:
+                    v = float(val)
+                except ValueError:
+                    v = val.lower()
+                key.append(_Reversed(v) if desc else v)
+            return key
+
+        paired = sorted(zip(rows_raw, rows_vis), key=_sort_key)
+        rows_raw, rows_vis = (list(x) for x in zip(*paired)) if paired else ([], [])
+
     if args.raw:
         for r in rows_raw:
             print(args.sep.join(r))
@@ -439,9 +489,9 @@ def main():
             else:
                 print(f"\n{' '.join(args.jql)}\n")
         if use_color:
-            headers = [f"{Style.BRIGHT}{Fore.WHITE}{h}{Style.RESET_ALL}" for _,_,_,h in specs]
+            headers = [f"{Style.BRIGHT}{Fore.WHITE}{h}{Style.RESET_ALL}" for _,_,_,_,h in specs]
         else:
-            headers = [h for _,_,_,h in specs]
+            headers = [h for _,_,_,_,h in specs]
         if args.numbers:
             rows_vis = [[str(i+1)] + r for i, r in enumerate(rows_vis)]
             headers = ['#'] + headers
