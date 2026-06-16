@@ -1,50 +1,177 @@
-#!/bin/sh
+#!/bin/bash
 
-PORT="8080";
-IP="127.0.0.1";
+HOST="127.0.0.1"
+PORT="8080"
+OPEN_BROWSER=false
+DOCROOT=""
+ROUTER=""
+INI_FILES=()
+DEBUG=false
+PROFILE=false
+PROFILE_DIR="/tmp/xdebug/profiler"
 
-if [ ! -z "$1" ]; then
-    
-    if [[ "$1" =~ ^[0-9]+$ ]]; then
-        PORT=$1;
-        echo $PORT
-    elif [ "$1" == "--help" ]; then
-        echo "Usage: $( basename $0 ) [PORT]"
-        echo "Starts a PHP server listening at the specified port"
-        echo "(or ${PORT} by default) and serving the current folder";
-        exit 1;
+show_help() {
+    echo "Usage: $(basename "$0") [options]"
+    echo ""
+    echo "Options:"
+    echo "  -b, --browser         Open the browser 2 seconds after starting the server"
+    echo "  -h, --host <host>     Host the server will listen on (default: 127.0.0.1)"
+    echo "  -p, --port <port>     Port the server will listen on (default: 8080)"
+    echo "  -t, --docroot <dir>   Document root directory (default: current directory)"
+    echo "  -f, --file <file>     Router script passed to every request (PHP's -F)"
+    echo "  -i, --ini <file>      Inject a PHP ini file (can be used multiple times)"
+    echo "  -d, --debug               Enable XDebug debug mode"
+    echo "  -P, --profile             Enable XDebug profiler (trigger mode)"
+    echo "      --profile-dir <dir>   Profiler output directory (default: /tmp/xdebug/profiler)"
+    echo "      --help                Show this help message"
+}
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -b|--browser)
+            OPEN_BROWSER=true
+            shift
+            ;;
+        -h|--host)
+            HOST="$2"
+            shift 2
+            ;;
+        -p|--port)
+            PORT="$2"
+            shift 2
+            ;;
+        -t|--docroot)
+            DOCROOT="$2"
+            shift 2
+            ;;
+        -f|-F|--file)
+            ROUTER="$2"
+            shift 2
+            ;;
+        -i|--ini)
+            INI_FILES+=("$2")
+            shift 2
+            ;;
+        -d|--debug)
+            DEBUG=true
+            shift
+            ;;
+        -P|--profile)
+            PROFILE=true
+            shift
+            ;;
+        --profile-dir)
+            PROFILE_DIR="$2"
+            shift 2
+            ;;
+        --help)
+            show_help
+            exit 0
+            ;;
+        *)
+            echo "Unknown option: $1"
+            show_help
+            exit 1
+            ;;
+    esac
+done
+
+URL="http://$HOST:$PORT"
+
+# resolve a command that open the browser depending on the OS 
+CMD=""
+case "$OSTYPE" in
+  darwin*)  CMD="open" ;;
+  msys*)    CMD="start" ;;
+  cygwin*)  CMD="cygstart" ;;
+  linux*)   grep -q Microsoft /proc/version && CMD="explorer.exe" || CMD="xdg-open" ;;
+esac
+
+if nc -z $HOST $PORT 2>/dev/null; then
+    printf "${cRed}Error:${c0} port ${cRed}$PORT${c0} is already in use.\n"
+    exit 1
+fi
+
+if [[ "$OPEN_BROWSER" == true ]] && [[ -n "$CMD" ]]; then
+    printf "Will open a browser at ${cCyan}$URL${c0}\n"
+    echo ""
+    # prepare the browser to open in 2 seconds, so
+    # there is time for the server to start
+    (sleep 2 && $CMD "$URL") &
+fi
+
+printf "Serving ${cWhite}${DOCROOT:-$PWD}${c0} on ${cCyan}http://$HOST:${cGreen}$PORT${c0}\n\n"
+
+PHP_CMD="php -S $HOST:$PORT"
+[[ -n "$DOCROOT" ]] && PHP_CMD="$PHP_CMD -t $DOCROOT"
+[[ -n "$ROUTER" ]] && PHP_CMD="$PHP_CMD -F $ROUTER"
+
+if [[ "$DEBUG" == true ]] || [[ "$PROFILE" == true ]]; then
+    if php -r "exit(extension_loaded('xdebug') ? 0 : 1);" 2>/dev/null; then
+        printf "  ${cDGreen}xdebug:${c0} pre-loaded by the system\n"
+    else
+        XDEBUG_SO="$(php-config --extension-dir)/xdebug.so"
+        if [[ ! -f "$XDEBUG_SO" ]]; then
+            printf "${cRed}Error:${c0} xdebug not found at ${cWhite}$XDEBUG_SO${c0}\n"
+            exit 1
+        fi
+        printf "  ${cDGreen}xdebug:${c0} not system-loaded, injecting ${cWhite}$XDEBUG_SO${c0}\n"
+        PHP_CMD="$PHP_CMD -d zend_extension=$XDEBUG_SO"
+    fi
+    XDEBUG_VERSION=$(php -r "echo phpversion('xdebug');" 2>/dev/null)
+    XDEBUG_MAJOR="${XDEBUG_VERSION%%.*}"
+    printf "  ${cDGreen}xdebug version:${c0} ${cWhite}$XDEBUG_VERSION${c0}\n\n"
+
+    if [[ "$DEBUG" == true ]]; then
+        printf "${cYellow}Debug mode enabled${c0}\n"
+        if [[ "$XDEBUG_MAJOR" -ge 3 ]]; then
+            PHP_CMD="$PHP_CMD"\
+" -d xdebug.mode=debug,develop"\
+" -d xdebug.client_host=127.0.0.1"\
+" -d xdebug.client_port=9003"\
+" -d xdebug.start_with_request=yes"\
+" -d xdebug.var_display_max_depth=10"\
+" -d xdebug.cli_color=1"
+        else
+            PHP_CMD="$PHP_CMD"\
+" -d xdebug.remote_enable=1"\
+" -d xdebug.remote_host=127.0.0.1"\
+" -d xdebug.remote_port=9003"\
+" -d xdebug.remote_autostart=1"\
+" -d xdebug.var_display_max_depth=10"\
+" -d xdebug.cli_color=1"
+        fi
+        printf "\n"
     fi
 
+    if [[ "$PROFILE" == true ]]; then
+        mkdir -p "$PROFILE_DIR"
+        printf "${cYellow}Profiler enabled${c0} (trigger mode)\n"
+        printf "  ${cDGreen}output dir:${c0} ${cWhite}$PROFILE_DIR${c0}\n"
+        printf "  ${cDGreen}trigger:${c0} add ${cWhite}XDEBUG_PROFILE=1${c0} to GET,POST or COOKIES\n"
+        if [[ "$XDEBUG_MAJOR" -ge 3 ]]; then
+            PHP_CMD="$PHP_CMD"\
+" -d xdebug.mode=profile"\
+" -d xdebug.start_with_request=trigger"\
+" -d xdebug.output_dir=$PROFILE_DIR"\
+" -d xdebug.profiler_output_name=profiler.%t.%R.%s.out"
+        else
+            PHP_CMD="$PHP_CMD"\
+" -d xdebug.profiler_enable_trigger=1"\
+" -d xdebug.profiler_output_dir=$PROFILE_DIR"\
+" -d xdebug.profiler_output_name=profiler.%t.%R.%s.out"
+        fi
+        printf "\n"
+    fi
 fi
 
-printf "Serving ${cWhite}$PWD${c0} on ${cWhite}http://$IP:${cGreen}$PORT${c0} ...\n"
-
-BROWSER_CMD=""
-if [ "$OS" == "mac" ]; then
-    BROWSER_CMD="open http://$IP:$PORT"
-elif [ "$OS" == "win" ]; then
-    BROWSER_CMD="start http://$IP:$PORT"
-elif [ "$OS" == "linux" ] || [ "$OS" == "cygwin" ]; then
-    BROWSER_CMD="xdg-open http://$IP:$PORT"
+if [[ ${#INI_FILES[@]} -eq 1 ]]; then
+    PHP_CMD="$PHP_CMD -c ${INI_FILES[0]}"
+elif [[ ${#INI_FILES[@]} -gt 1 ]]; then
+    MERGED_INI=$(mktemp /tmp/serve_ini_XXXXXX.ini)
+    trap "rm -f $MERGED_INI" EXIT
+    cat "${INI_FILES[@]}" > "$MERGED_INI"
+    PHP_CMD="$PHP_CMD -c $MERGED_INI"
 fi
 
-if [ ! -z "$BROWSER_CMD" ]; then
-    sleep 1 && $BROWSER_CMD &
-fi
-
-EXTENSION_DIR=$(php-config --extension-dir)
-if [ "$(php --version | head -n 1 | cut -d. -f1 | cut -d\  -f2)" == "5" ]; then
-    XDEBUG_FIlE=$FILESROOT/resources/xdebug2.ini
-else
-    XDEBUG_FIlE=$FILESROOT/resources/xdebug3.ini
-fi
-
-printf "xdebug config to inject: ${cGreen}${XDEBUG_FIlE}${c0}\n"
-
-php \
--c ${XDEBUG_FIlE} \
--d extension_dir=$EXTENSION_DIR \
--S 127.0.0.1:$PORT -t .
-
-#php -S 127.0.0.1:$PORT -t .
-
+exec $PHP_CMD
