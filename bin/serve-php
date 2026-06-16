@@ -8,20 +8,22 @@ ROUTER=""
 INI_FILES=()
 DEBUG=false
 PROFILE=false
+DRY_RUN=false
 PROFILE_DIR="/tmp/xdebug/profiler"
 
 show_help() {
     echo "Usage: $(basename "$0") [options]"
     echo ""
     echo "Options:"
-    echo "  -b, --browser         Open the browser 2 seconds after starting the server"
-    echo "  -h, --host <host>     Host the server will listen on (default: 127.0.0.1)"
-    echo "  -p, --port <port>     Port the server will listen on (default: 8080)"
-    echo "  -t, --docroot <dir>   Document root directory (default: current directory)"
-    echo "  -f, --file <file>     Router script passed to every request (PHP's -F)"
-    echo "  -i, --ini <file>      Inject a PHP ini file (can be used multiple times)"
+    echo "  -b, --browser             Open the browser 2 seconds after starting the server"
+    echo "  -h, --host <host>         Host the server will listen on (default: 127.0.0.1)"
+    echo "  -p, --port <port>         Port the server will listen on (default: 8080)"
+    echo "  -t, --docroot <dir>       Document root directory (default: current directory)"
+    echo "  -f, --file <file>         Router script passed to every request (PHP's -F)"
+    echo "  -i, --ini <file>          Inject a PHP ini file (can be used multiple times)"
     echo "  -d, --debug               Enable XDebug debug mode"
     echo "  -P, --profile             Enable XDebug profiler (trigger mode)"
+    echo "  -r, --dry                 Print the PHP command instead of running it"
     echo "      --profile-dir <dir>   Profiler output directory (default: /tmp/xdebug/profiler)"
     echo "      --help                Show this help message"
 }
@@ -51,6 +53,10 @@ while [[ $# -gt 0 ]]; do
         -i|--ini)
             INI_FILES+=("$2")
             shift 2
+            ;;
+        -r|--dry)
+            DRY_RUN=true
+            shift
             ;;
         -d|--debug)
             DEBUG=true
@@ -174,4 +180,11 @@ elif [[ ${#INI_FILES[@]} -gt 1 ]]; then
     PHP_CMD="$PHP_CMD -c $MERGED_INI"
 fi
 
-exec $PHP_CMD
+if [[ "$DRY_RUN" == true ]]; then
+    printf "${cYellow}Dry run${c0}\nThe following command would be executed:\n\n"
+    FORMATTED_CMD=$(echo "$PHP_CMD" | sed 's/ -/ \\\n  -/g; s/%/%%/g')
+    printf "${cWhite}${FORMATTED_CMD}${c0}\n"
+    echo
+else
+    exec $PHP_CMD
+fi
