@@ -25,9 +25,10 @@ Config dir ~/.jql-config/:
   columns-rename.json     ← user field→header rename
 
 Usage:
-  jql [-f fields] [-r] [-s SEP] [-n LIMIT] [-T TF]
-      [-q] [-c] [-d DEBUG_FLAGS]
-      [--list-fields [all|jira|custom|update]] <JQL>
+    jql [-f fields] [-fa fields] [-fr fields] [-fl]
+            [-r] [-s SEP] [-n LIMIT] [-T TF]
+            [-q] [-c] [-d DEBUG_FLAGS]
+            [--jira-fields [all|jira|custom|update]] <JQL>
 
 Jira OAuth 2.0 scopes required:
     Classic:    read:jira-work
@@ -65,8 +66,11 @@ CF_RE = re.compile(r'^cf\[(\d+)\]$')
 # --- Color support ----------------------------------------------------------
 
 def get_color(field, value):
-    """
-    Return color codes for field-based coloring.
+    """Choose terminal color codes for a field value.
+
+    Use this when rendering table cells with semantic colors. The function
+    expects normalized, lowercase values (for example from colorize).
+    Returns a tuple `(fg, bg)` where each item may be an empty string.
     """
     fg = ''
     bg = ''
@@ -110,8 +114,11 @@ def get_color(field, value):
     return fg, bg
 
 def colorize(field, val):
-    """
-    Wrap a value with color codes.
+    """Apply semantic coloring to one display value.
+
+    This is a thin wrapper around get_color. It lowercases the input value for
+    matching, then wraps the original text with ANSI color codes when a rule
+    exists. If no rule matches, the input text is returned unchanged.
     """
     fg, bg = get_color(field, val.lower())
     if fg or bg:
@@ -121,10 +128,20 @@ def colorize(field, val):
 # Helpers
 
 def ensure_config_dir():
+    """Create the local configuration directory if it is missing.
+
+    This should be called before writing cache or mapping files under
+    `~/.jql-config`.
+    """
     os.makedirs(CONFIG_DIR, exist_ok=True)
 
 
 def load_json(path):
+    """Read a JSON file and return a Python object.
+
+    If the file does not exist or parsing fails, this returns an empty
+    dictionary so callers can continue with safe defaults.
+    """
     try:
         with open(path) as f:
             return json.load(f)
@@ -133,6 +150,11 @@ def load_json(path):
 
 
 def save_json(path, obj):
+    """Write a Python object to disk as formatted JSON.
+
+    Write errors are intentionally ignored because cache persistence should not
+    break the CLI execution path.
+    """
     try:
         with open(path, 'w') as f:
             json.dump(obj, f, indent=2)
@@ -141,6 +163,12 @@ def save_json(path, obj):
 
 
 def fetch_issues(url, auth, params, limit):
+    """Fetch issues from Jira's enhanced search endpoint with pagination.
+
+    The function follows `nextPageToken` until Jira reports the last page.
+    It enforces the user limit (`-n`), where `-1` means fetch all available
+    pages. Returns a flat list of issue objects.
+    """
     issues = []
     page = 100 if limit < 0 else min(limit, 100)
     next_page_token = None
@@ -184,6 +212,11 @@ def fetch_issues(url, auth, params, limit):
 
 
 def extract_text(node):
+    """Flatten Jira ADF-like structures into plain text.
+
+    This is primarily used for rich-text fields where Jira returns nested
+    document nodes instead of plain strings.
+    """
     if isinstance(node, dict):
         if node.get('type') == 'text':
             return node.get('text', '')
@@ -194,6 +227,11 @@ def extract_text(node):
 
 
 def fetch_id_map(api, auth):
+    """Build a map of Jira field IDs to human-readable names.
+
+    The map is used for output headers and for applying column renames.
+    Returns an empty map when the lookup fails.
+    """
     try:
         r = requests.get(f"{api}/rest/api/3/field", auth=auth)
         if r.status_code != 200:
@@ -208,6 +246,12 @@ def fetch_id_map(api, auth):
 # Cache update
 
 def update_field_cache(api, auth):
+    """Refresh the local cache that maps field names/clause names to IDs.
+
+    This powers flexible field input such as Jira field names, clause names,
+    and aliases. Custom shorthand keys like `cf[12345]` are not stored here,
+    because they are resolved separately.
+    """
     try:
         r = requests.get(f"{api}/rest/api/3/field", auth=auth)
         if r.status_code != 200:
@@ -227,6 +271,11 @@ def update_field_cache(api, auth):
 # List fields
 
 def list_fields(api, auth, category):
+    """Print Jira fields for discovery and troubleshooting, then exit.
+
+    Category controls which fields are shown: all, jira (system), or custom.
+    Custom field IDs are printed in `cf[12345]` shorthand for convenience.
+    """
     try:
         r = requests.get(f"{api}/rest/api/3/field", auth=auth)
         if r.status_code != 200:
@@ -250,25 +299,159 @@ def list_fields(api, auth, category):
 # Load maps
 
 class _Reversed:
-    """Wrapper that inverts comparison order, used for per-column descending sort."""
+    """Comparison wrapper used to invert sort direction.
+
+    Python's `sorted(..., key=...)` sorts ascending by default. Wrapping a
+    value in this class flips comparisons so selected columns can sort
+    descending while still using a single composite sort key.
+    """
     __slots__ = ('val',)
-    def __init__(self, val): self.val = val
-    def __lt__(self, o): return self.val > o.val
-    def __le__(self, o): return self.val >= o.val
-    def __gt__(self, o): return self.val < o.val
-    def __ge__(self, o): return self.val <= o.val
-    def __eq__(self, o): return self.val == o.val
+
+    def __init__(self, val):
+        """Store the value that will participate in inverted comparisons."""
+        self.val = val
+
+    def __lt__(self, o):
+        """Invert less-than so larger values come first."""
+        return self.val > o.val
+
+    def __le__(self, o):
+        """Invert less-or-equal to support descending ordering."""
+        return self.val >= o.val
+
+    def __gt__(self, o):
+        """Invert greater-than to support descending ordering."""
+        return self.val < o.val
+
+    def __ge__(self, o):
+        """Invert greater-or-equal to support descending ordering."""
+        return self.val <= o.val
+
+    def __eq__(self, o):
+        """Compare wrapped values for equality without inversion."""
+        return self.val == o.val
 
 
 def load_maps():
+    """Load all local mapping files used by field processing.
+
+    Returns three dictionaries in order: field cache, alias map, and column
+    rename map. Missing files are converted to empty dictionaries.
+    """
     field_map = load_json(CACHE_FILE) or {}
     alias_map = load_json(ALIASES_FILE) or {}
     col_rename = load_json(RENAME_FILE) or {}
     return field_map, alias_map, col_rename
 
+
+def parse_field_token(token):
+    """Parse one field token into alias and display formatting hints.
+
+    Supported token forms:
+        - `field` for no formatting hint
+        - `field(30)` to wrap output to width 30
+        - `field{30}` to truncate output to width 30
+
+    Returns `(alias, wrap, trunc)`, where `wrap` and `trunc` are optional.
+    """
+    alias = token.strip()
+    wrap = None
+    trunc = None
+    m1 = re.match(r'^(.+?)\((\d+)\)$', alias)
+    m2 = re.match(r'^(.+?)\{(\d+)\}$', alias)
+    if m1:
+        alias, wrap = m1.group(1), int(m1.group(2))
+    elif m2:
+        alias, trunc = m2.group(1), int(m2.group(2))
+    return alias, wrap, trunc
+
+
+def resolve_field_id(alias, field_map, alias_map):
+    """Resolve a user-entered field token to the Jira API field id.
+
+    Resolution priority:
+        1. User alias mapping (`fields-aliases.json`)
+        2. `cf[12345]` shorthand
+        3. Cached field name/clause mapping
+        4. Raw token as fallback
+    """
+    if alias in alias_map:
+        return alias_map[alias]
+
+    mcf = CF_RE.match(alias)
+    if mcf:
+        return f"customfield_{mcf.group(1)}"
+
+    return field_map.get(alias, alias)
+
+
+def build_field_specs(field_string, field_map, alias_map, col_rename, id_map):
+    """Build the canonical field specification list for query and rendering.
+
+    Each returned item is `(alias, real_field_id, wrap, trunc, header)`.
+    Duplicate resolved field IDs are dropped while preserving first-seen order.
+    """
+    specs = []
+    seen = set()
+
+    for token in field_string.split(','):
+        token = token.strip()
+        if not token:
+            continue
+
+        alias, wrap, trunc = parse_field_token(token)
+        real = resolve_field_id(alias, field_map, alias_map)
+
+        if real in seen:
+            continue
+        seen.add(real)
+
+        default_header = id_map.get(real, real)
+        header = col_rename.get(default_header, default_header)
+
+        specs.append((alias, real, wrap, trunc, header))
+
+    return specs
+
+
+def normalize_field_list(field_values, field_map, alias_map):
+    """Normalize one or more field lists into resolved Jira field IDs.
+
+    This is used by `--fields-remove` so removals match the same resolution
+    logic as the main field selection path. Returns unique field IDs while
+    preserving insertion order.
+    """
+    normalized = []
+    seen = set()
+
+    for raw_value in field_values:
+        for token in raw_value.split(','):
+            token = token.strip()
+            if not token:
+                continue
+
+            alias, _, _ = parse_field_token(token)
+            real = resolve_field_id(alias, field_map, alias_map)
+
+            if real in seen:
+                continue
+            seen.add(real)
+            normalized.append(real)
+
+    return normalized
+
 # Main
 
 def main():
+    """CLI entry point.
+
+    Responsibilities:
+        - Parse command-line arguments
+        - Handle maintenance commands (jira field listing/cache update)
+        - Resolve final field set (`--fields`, `--fields-add`, `--fields-remove`)
+        - Optionally print final field list (`--fields-list`)
+        - Query Jira and render either raw or table output
+    """
     api = os.getenv('JIRA_URL', '').rstrip('/')
     auth = HTTPBasicAuth(os.getenv('JIRA_USER', ''), os.getenv('JIRA_API_TOKEN', ''))
     parser = argparse.ArgumentParser(
@@ -279,6 +462,23 @@ def main():
         '-f', '--fields',
         default='key,issuetype(15),priority,status(15),summary(30),assignee(15)',
         help='Fields list (default: key,issuetype(15),priority,status(15),summary(30),assignee(15))'
+    )
+    parser.add_argument(
+        '-fa', '--fields-add',
+        action='append',
+        default=[],
+        help='Additional fields to append on top of the current fields list before running the query (comma-separated; can be repeated)'
+    )
+    parser.add_argument(
+        '-fr', '--fields-remove',
+        action='append',
+        default=[],
+        help='Fields to remove from the current fields list before running the query (comma-separated; can be repeated)'
+    )
+    parser.add_argument(
+        '-fl', '--fields-list',
+        action='store_true',
+        help='List the final Jira fields that will be used and exit'
     )
     parser.add_argument(
         '-r', '--raw',
@@ -332,10 +532,10 @@ def main():
         default=''        
     )
     parser.add_argument(
-        '--list-fields',
+        '--jira-fields',
         nargs='?', const='all',
         choices=['all','jira','custom','update'],
-        help='List fields or update cache'
+        help='List all fields of the Jira instance, or update cache'
     )
     parser.add_argument(
         'jql', nargs='*',
@@ -345,10 +545,10 @@ def main():
 
     debug_flags = [f.strip() for f in args.debug.split(',') if f.strip()]
 
-    if args.list_fields:
-        if args.list_fields == 'update':
+    if args.jira_fields:
+        if args.jira_fields == 'update':
             update_field_cache(api, auth)
-        list_fields(api, auth, args.list_fields)
+        list_fields(api, auth, args.jira_fields)
 
     if not args.jql:
         parser.error('JQL query required')
@@ -360,31 +560,24 @@ def main():
 
     id_map = fetch_id_map(api, auth)
 
-    specs = []
-    for it in args.fields.split(','):
-        alias = it.strip()
-        wrap = None
-        trunc = None
-        m1 = re.match(r'^(.+?)\((\d+)\)$', alias)
-        m2 = re.match(r'^(.+?)\{(\d+)\}$', alias)
-        if m1:
-            alias, wrap = m1.group(1), int(m1.group(2))
-        elif m2:
-            alias, trunc = m2.group(1), int(m2.group(2))
+    specs = build_field_specs(args.fields, field_map, alias_map, col_rename, id_map)
 
-        if alias in alias_map:
-            real = alias_map[alias]
-        else:
-            mcf = CF_RE.match(alias)
-            if mcf:
-                real = f"customfield_{mcf.group(1)}"
-            else:
-                real = field_map.get(alias, alias)
+    if args.fields_add:
+        extra_specs = build_field_specs(','.join(args.fields_add), field_map, alias_map, col_rename, id_map)
+        seen_fields = set(real for _, real, _, _, _ in specs)
+        for spec in extra_specs:
+            if spec[1] in seen_fields:
+                continue
+            specs.append(spec)
+            seen_fields.add(spec[1])
 
-        default_header = id_map.get(real, real)
-        header = col_rename.get(default_header, default_header)
+    if args.fields_remove:
+        remove_fields = set(normalize_field_list(args.fields_remove, field_map, alias_map))
+        specs = [spec for spec in specs if spec[1] not in remove_fields]
 
-        specs.append((alias, real, wrap, trunc, header))
+    if args.fields_list:
+        print(','.join(real for _, real, _, _, _ in specs))
+        return
 
     url = f"{api}/rest/api/3/search/jql"
     params = {'jql': ' '.join(args.jql), 'fields': ','.join(r for _,r,_,_,_ in specs)}
