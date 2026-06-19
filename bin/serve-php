@@ -160,12 +160,12 @@ if [[ "$DEBUG" == true ]] || [[ "$PROFILE" == true ]]; then
 " -d xdebug.mode=profile"\
 " -d xdebug.start_with_request=trigger"\
 " -d xdebug.output_dir=$PROFILE_DIR"\
-" -d xdebug.profiler_output_name=profiler.%t.%R.%s.out"
+" -d xdebug.profiler_output_name=profiler.%t.%R.out"
         else
             PHP_CMD="$PHP_CMD"\
 " -d xdebug.profiler_enable_trigger=1"\
 " -d xdebug.profiler_output_dir=$PROFILE_DIR"\
-" -d xdebug.profiler_output_name=profiler.%t.%R.%s.out"
+" -d xdebug.profiler_output_name=profiler.%t.%R.out"
         fi
         printf "\n"
     fi
