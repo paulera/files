@@ -1,0 +1,61 @@
+#!/bin/bash
+
+raw=$(claude \
+  --print \
+  --no-session-persistence \
+  --output-format text \
+  --model haiku \
+  --effort low \
+  "/usage" 
+)
+
+get_percentage() {
+    echo "$1" | sed "s/[^0-9]*\([0-9]*\)%.*/\1/g"
+}
+
+get_reset_datetime() {
+    reset_date=$(echo "$1" | sed "s/.*resets \([A-Za-z0-9: ]*\).*$/\1/g" | sed "s/ at//")
+    date -d "$reset_date"
+}
+
+seconds_until_datetime() {
+    epoch_to=$(date -d "$1" +%s)
+    epoch_from=$(date +%s)
+    echo "$(( epoch_to - epoch_from ))"
+}
+
+seconds_to_time() {
+    if [[ $1 -ge 86400 ]]; then
+        days=$(( $1 / 86400 ))
+        s='s' && [[ $days -eq 1 ]] && s=''
+        printf "$days day$s and "
+        date -d@$1 -u +%H:%M:%S
+    else
+        date -d@$1 -u +%H:%M:%S
+    fi
+}
+
+session=$(echo "$raw" | grep "session")
+week=$(echo "$raw" | grep "week")
+
+if [[ -z "$session" || -z "$week" ]]; then
+    echo "Usage data unavailable - try again in a moment"
+    exit 1
+fi
+
+session_pct=$(get_percentage "$session")
+session_reset_datetime=$(get_reset_datetime "$session")
+session_seconds_left=$(seconds_until_datetime "$session_reset_datetime")
+session_reset=$(seconds_to_time "$session_seconds_left")
+
+week_pct=$(get_percentage "$week")
+week_reset_datetime=$(get_reset_datetime "$week")
+week_seconds_left=$(seconds_until_datetime "$week_reset_datetime")
+week_reset=$(seconds_to_time "$week_seconds_left")
+week_reset_extra_info=""
+if [[ $week_seconds_left -ge 86400 ]]; then
+   week_reset_extra_info="("$(date -d "$week_reset_datetime" +%a)" at "$(date -d "$week_reset_datetime" +%H:%M:%S)")"
+fi
+
+printf "%-8s %3s%% ... resets in %s\n" "Session:" "$session_pct" "$session_reset"
+printf "%-8s %3s%% ... resets in %s %s\n" "Week:" "$week_pct" "$week_reset" "$week_reset_extra_info"
