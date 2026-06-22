@@ -1,0 +1,963 @@
+#!/usr/bin/env bash
+# AI: Claude (Anthropic)
+# sysreport.sh - macOS environment snapshot for system optimization
+# Output: YAML to stdout, or file(s) via --filename / --split-output
+# Usage: ./sysreport.sh [--section SECTION] [--filename NAME] [--split-output]
+
+# https://claude.ai/chat/e59eab92-183c-4d05-a0d8-e3c0e21960d6
+
+set -euo pipefail
+
+# ---------------------------------------------------------------------------
+# Argument parsing
+# ---------------------------------------------------------------------------
+SECTION=""
+FILENAME=""
+SPLIT_OUTPUT=false
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --section)      SECTION="$2";   shift 2 ;;
+    --filename)     FILENAME="$2";  shift 2 ;;
+    --split-output) SPLIT_OUTPUT=true; shift ;;
+    *) echo "Unknown option: $1" >&2; exit 1 ;;
+  esac
+done
+
+# ---------------------------------------------------------------------------
+# Output helpers
+# ---------------------------------------------------------------------------
+# Strip .yaml/.yml extension from base name (we'll re-add it)
+_base_name() {
+  local name="$1"
+  name="${name%.yaml}"
+  name="${name%.yml}"
+  echo "$name"
+}
+
+_section_file() {
+  local section="$1"
+  local base
+  base=$(_base_name "$FILENAME")
+  echo "${base}.${section}.yaml"
+}
+
+# Accumulate section output; flush to correct destination at end
+declare -A SECTION_CONTENT
+
+_emit() {
+  local section="$1"
+  local content="$2"
+  SECTION_CONTENT["$section"]+="$content"$'\n'
+}
+
+# ---------------------------------------------------------------------------
+# Safe helpers - avoid leaking sensitive data
+# ---------------------------------------------------------------------------
+_sanitize_serial() {
+  # Mask middle characters of serial numbers
+  local s="$1"
+  local len=${#s}
+  if [[ $len -ge 6 ]]; then
+    echo "${s:0:3}****${s: -3}"
+  else
+    echo "***"
+  fi
+}
+
+_yaml_str() {
+  # Escape a string for safe YAML inline value
+  local v="$1"
+  v="${v//\\/\\\\}"
+  v="${v//\"/\\\"}"
+  echo "\"$v\""
+}
+
+_cmd_or_na() {
+  # Run command, return "N/A" on failure
+  eval "$1" 2>/dev/null || echo "N/A"
+}
+
+# ---------------------------------------------------------------------------
+# SECTION: hardware
+# ---------------------------------------------------------------------------
+collect_hardware() {
+  local chip model mem storage_info
+  chip=$(system_profiler SPHardwareDataType 2>/dev/null | awk -F': ' '/Chip:/{print $2}' | xargs)
+  model=$(system_profiler SPHardwareDataType 2>/dev/null | awk -F': ' '/Model Name:/{print $2}' | xargs)
+  model_id=$(system_profiler SPHardwareDataType 2>/dev/null | awk -F': ' '/Model Identifier:/{print $2}' | xargs)
+  mem=$(system_profiler SPHardwareDataType 2>/dev/null | awk -F': ' '/Memory:/{print $2}' | xargs)
+  cpu_cores=$(sysctl -n hw.physicalcpu 2>/dev/null || echo "N/A")
+  perf_cores=$(sysctl -n hw.perflevel0.physicalcpu 2>/dev/null || echo "N/A")
+  eff_cores=$(sysctl -n hw.perflevel1.physicalcpu 2>/dev/null || echo "N/A")
+  gpu_cores=$(system_profiler SPDisplaysDataType 2>/dev/null | awk -F': ' '/Total Number of Cores:/{print $2}' | xargs || echo "N/A")
+  serial_raw=$(system_profiler SPHardwareDataType 2>/dev/null | awk -F': ' '/Serial Number/{print $2}' | xargs)
+  serial=$(_sanitize_serial "$serial_raw")
+  boot_rom=$(system_profiler SPHardwareDataType 2>/dev/null | awk -F': ' '/Boot ROM Version:/{print $2}' | xargs || echo "N/A")
+
+  _emit hardware "hardware:"
+  _emit hardware "  model: $(_yaml_str "$model")"
+  _emit hardware "  model_identifier: $(_yaml_str "$model_id")"
+  _emit hardware "  chip: $(_yaml_str "$chip")"
+  _emit hardware "  memory: $(_yaml_str "$mem")"
+  _emit hardware "  cpu_cores_physical: $cpu_cores"
+  _emit hardware "  cpu_perf_cores: $perf_cores"
+  _emit hardware "  cpu_efficiency_cores: $eff_cores"
+  _emit hardware "  gpu_cores: $gpu_cores"
+  _emit hardware "  serial_masked: $(_yaml_str "$serial")"
+  _emit hardware "  boot_rom: $(_yaml_str "$boot_rom")"
+
+  # Battery
+  local batt_info cycle health
+  batt_info=$(system_profiler SPPowerDataType 2>/dev/null)
+  cycle=$(echo "$batt_info" | awk -F': ' '/Cycle Count:/{print $2}' | xargs || echo "N/A")
+  health=$(echo "$batt_info" | awk -F': ' '/Condition:/{print $2}' | xargs || echo "N/A")
+  max_cap=$(echo "$batt_info" | awk -F': ' '/Maximum Capacity:/{print $2}' | xargs || echo "N/A")
+  _emit hardware "  battery:"
+  _emit hardware "    cycle_count: $cycle"
+  _emit hardware "    condition: $(_yaml_str "$health")"
+  _emit hardware "    maximum_capacity: $(_yaml_str "$max_cap")"
+}
+
+# ---------------------------------------------------------------------------
+# SECTION: os
+# ---------------------------------------------------------------------------
+collect_os() {
+  local os_name os_version os_build kernel arch uptime
+  os_name=$(sw_vers -productName 2>/dev/null || echo "N/A")
+  os_version=$(sw_vers -productVersion 2>/dev/null || echo "N/A")
+  os_build=$(sw_vers -buildVersion 2>/dev/null || echo "N/A")
+  kernel=$(uname -r 2>/dev/null || echo "N/A")
+  arch=$(uname -m 2>/dev/null || echo "N/A")
+  uptime=$(uptime | sed 's/.*up //' | sed 's/,.*//' | xargs || echo "N/A")
+  hostname=$(scutil --get ComputerName 2>/dev/null || hostname)
+  sip=$(csrutil status 2>/dev/null | awk '{print $NF}' || echo "N/A")
+  gatekeeper=$(spctl --status 2>/dev/null | awk '{print $NF}' || echo "N/A")
+  filevault=$(fdesetup status 2>/dev/null | awk '{print $NF}' || echo "N/A")
+
+  _emit os "os:"
+  _emit os "  name: $(_yaml_str "$os_name")"
+  _emit os "  version: $(_yaml_str "$os_version")"
+  _emit os "  build: $(_yaml_str "$os_build")"
+  _emit os "  kernel: $(_yaml_str "$kernel")"
+  _emit os "  architecture: $(_yaml_str "$arch")"
+  _emit os "  hostname: $(_yaml_str "$hostname")"
+  _emit os "  uptime: $(_yaml_str "$uptime")"
+  _emit os "  security:"
+  _emit os "    sip: $(_yaml_str "$sip")"
+  _emit os "    gatekeeper: $(_yaml_str "$gatekeeper")"
+  _emit os "    filevault: $(_yaml_str "$filevault")"
+
+  # Pending updates
+  local updates
+  updates=$(softwareupdate -l 2>&1 | grep -c '\*' || echo "0")
+  _emit os "  pending_updates: $updates"
+}
+
+# ---------------------------------------------------------------------------
+# SECTION: storage
+# ---------------------------------------------------------------------------
+collect_storage() {
+  _emit storage "storage:"
+  _emit storage "  volumes:"
+
+  df -H 2>/dev/null | grep -E '^/dev/' | while read -r fs size used avail pct mount; do
+    _emit storage "    - filesystem: $(_yaml_str "$fs")"
+    _emit storage "      mountpoint: $(_yaml_str "$mount")"
+    _emit storage "      size: $(_yaml_str "$size")"
+    _emit storage "      used: $(_yaml_str "$used")"
+    _emit storage "      available: $(_yaml_str "$avail")"
+    _emit storage "      use_percent: $(_yaml_str "$pct")"
+  done
+
+  # APFS container info
+  local apfs_info
+  _emit storage "  apfs_containers:"
+  diskutil list 2>/dev/null | grep -E 'APFS Container|APFS Volume' | while IFS= read -r line; do
+    _emit storage "    - $(_yaml_str "$(echo "$line" | xargs)")"
+  done
+}
+
+# ---------------------------------------------------------------------------
+# SECTION: network
+# ---------------------------------------------------------------------------
+collect_network() {
+  _emit network "network:"
+
+  # Active interfaces only
+  _emit network "  interfaces:"
+  local iface ip mac
+  for iface in $(networksetup -listallhardwareports 2>/dev/null | awk '/Device:/{print $2}'); do
+    ip=$(ipconfig getifaddr "$iface" 2>/dev/null || echo "")
+    mac=$(networksetup -getmacaddress "$iface" 2>/dev/null | awk '{print $3}' || echo "")
+    [[ -z "$ip" && -z "$mac" ]] && continue
+    # Mask last octet of IP and last segment of MAC for privacy
+    ip_masked=$(echo "$ip" | sed 's/\.[0-9]*$/.xxx/')
+    mac_masked=$(echo "$mac" | sed 's/:[^:]*$/:**/')
+    _emit network "    - interface: $(_yaml_str "$iface")"
+    _emit network "      ip_masked: $(_yaml_str "$ip_masked")"
+    _emit network "      mac_masked: $(_yaml_str "$mac_masked")"
+  done
+
+  # Current WiFi SSID (no password, no BSSID)
+  local ssid
+  ssid=$(networksetup -getairportnetwork en0 2>/dev/null | awk -F': ' '{print $2}' || echo "N/A")
+  _emit network "  wifi_ssid: $(_yaml_str "$ssid")"
+
+  # DNS servers
+  _emit network "  dns_servers:"
+  scutil --dns 2>/dev/null | awk '/nameserver/{print $3}' | sort -u | while read -r dns; do
+    _emit network "    - $(_yaml_str "$dns")"
+  done
+
+  # VPN connections configured (names only, no credentials)
+  _emit network "  vpn_configs:"
+  networksetup -listallnetworkservices 2>/dev/null | grep -i vpn | while IFS= read -r vpn; do
+    _emit network "    - $(_yaml_str "$vpn")"
+  done
+}
+
+# ---------------------------------------------------------------------------
+# SECTION: devices
+# ---------------------------------------------------------------------------
+collect_devices() {
+  _emit devices "devices:"
+
+  # USB devices
+  _emit devices "  usb:"
+  system_profiler SPUSBDataType 2>/dev/null | awk -F': ' '/Product ID:|Vendor ID:|Manufacturer:|Speed:/{
+    key=$1; gsub(/^ +/,"",key); val=$2; gsub(/^ +/,"",val)
+    print "    " key ": \"" val "\""
+  }' | while IFS= read -r line; do
+    _emit devices "$line"
+  done
+
+  # Bluetooth devices (paired, names only - no addresses)
+  _emit devices "  bluetooth_paired:"
+  system_profiler SPBluetoothDataType 2>/dev/null | awk '/^\s{10}[A-Za-z].*:$/{gsub(/:$/,""); gsub(/^ +/,""); print "    - \"" $0 "\""}' | \
+    while IFS= read -r line; do _emit devices "$line"; done
+
+  # Thunderbolt / USB4
+  _emit devices "  thunderbolt:"
+  system_profiler SPThunderboltDataType 2>/dev/null | awk -F': ' '/Device Name:|Vendor Name:/{
+    key=$1; gsub(/^ +/,"",key); val=$2
+    print "    " key ": \"" val "\""
+  }' | while IFS= read -r line; do _emit devices "$line"; done
+
+  # Audio devices
+  _emit devices "  audio_devices:"
+  system_profiler SPAudioDataType 2>/dev/null | awk -F': ' '/^ {8}[A-Za-z].*:$/{
+    name=$1; gsub(/^ +/,"",name); print "    - \"" name "\""
+  }' | while IFS= read -r line; do _emit devices "$line"; done
+
+  # Displays
+  _emit devices "  displays:"
+  system_profiler SPDisplaysDataType 2>/dev/null | awk -F': ' '/Resolution:|Pixel Depth:|Display Type:|Connection Type:/{
+    key=$1; gsub(/^ +/,"",key); val=$2
+    print "    " key ": \"" val "\""
+  }' | while IFS= read -r line; do _emit devices "$line"; done
+}
+
+# ---------------------------------------------------------------------------
+# SECTION: apps
+# ---------------------------------------------------------------------------
+collect_apps() {
+  _emit apps "apps:"
+
+  # All installed .app bundles with version and last-used date
+  _emit apps "  installed:"
+  local app_dirs=("/Applications" "$HOME/Applications")
+  for dir in "${app_dirs[@]}"; do
+    [[ -d "$dir" ]] || continue
+    find "$dir" -maxdepth 2 -name "*.app" -type d 2>/dev/null | sort | while read -r app; do
+      local name version last_used use_count bundle_id
+      name=$(basename "$app" .app)
+      version=$(defaults read "$app/Contents/Info" CFBundleShortVersionString 2>/dev/null \
+                || defaults read "$app/Contents/Info" CFBundleVersion 2>/dev/null \
+                || echo "N/A")
+      bundle_id=$(defaults read "$app/Contents/Info" CFBundleIdentifier 2>/dev/null || echo "N/A")
+      last_used=$(mdls -name kMDItemLastUsedDate "$app" 2>/dev/null | awk -F'= ' '{print $2}' | tr -d '(null)' | xargs || echo "N/A")
+      use_count=$(mdls -name kMDItemUseCount "$app" 2>/dev/null | awk -F'= ' '{print $2}' | tr -d '(null)' | xargs || echo "N/A")
+      _emit apps "    - name: $(_yaml_str "$name")"
+      _emit apps "      bundle_id: $(_yaml_str "$bundle_id")"
+      _emit apps "      version: $(_yaml_str "$version")"
+      _emit apps "      last_used: $(_yaml_str "$last_used")"
+      _emit apps "      use_count: $(_yaml_str "$use_count")"
+      _emit apps "      path: $(_yaml_str "$app")"
+    done
+  done
+
+  # Homebrew casks
+  if command -v brew &>/dev/null; then
+    _emit apps "  homebrew_casks:"
+    brew list --cask 2>/dev/null | while read -r cask; do
+      local ver
+      ver=$(brew info --cask "$cask" 2>/dev/null | awk 'NR==1{print $NF}' || echo "N/A")
+      _emit apps "    - name: $(_yaml_str "$cask")"
+      _emit apps "      version: $(_yaml_str "$ver")"
+    done
+  fi
+
+  # Mac App Store apps via mas (if installed)
+  if command -v mas &>/dev/null; then
+    _emit apps "  mas_apps:"
+    mas list 2>/dev/null | while read -r id name version; do
+      _emit apps "    - name: $(_yaml_str "$name")"
+      _emit apps "      mas_id: $id"
+      _emit apps "      version: $(_yaml_str "$version")"
+    done
+  fi
+}
+
+# ---------------------------------------------------------------------------
+# SECTION: web_apps
+# ---------------------------------------------------------------------------
+collect_web_apps() {
+  _emit web_apps "web_apps:"
+
+  local browsers=(
+    "Brave Browser:$HOME/Library/Application Support/BraveSoftware/Brave-Browser"
+    "Thorium:$HOME/Library/Application Support/Thorium"
+    "Google Chrome:$HOME/Library/Application Support/Google/Chrome"
+    "Chromium:$HOME/Library/Application Support/Chromium"
+    "Microsoft Edge:$HOME/Library/Application Support/Microsoft Edge"
+  )
+
+  for entry in "${browsers[@]}"; do
+    local browser_name browser_path
+    browser_name="${entry%%:*}"
+    browser_path="${entry#*:}"
+
+    [[ -d "$browser_path" ]] || continue
+
+    _emit web_apps "  $(_yaml_str "$browser_name"):"
+
+    # Scan all profiles
+    for profile_dir in "$browser_path"/Default "$browser_path"/Profile\ *; do
+      [[ -d "$profile_dir" ]] || continue
+      local web_apps_dir="$profile_dir/Web Applications"
+      [[ -d "$web_apps_dir" ]] || continue
+
+      find "$web_apps_dir" -name "*.json" 2>/dev/null | while read -r manifest; do
+        local app_name app_url last_launch
+        app_name=$(python3 -c "import json,sys; d=json.load(open('$manifest')); print(d.get('name','N/A'))" 2>/dev/null || echo "N/A")
+        app_url=$(python3 -c "import json,sys; d=json.load(open('$manifest')); print(d.get('start_url',d.get('scope','N/A')))" 2>/dev/null || echo "N/A")
+        last_launch=$(mdls -name kMDItemLastUsedDate "$manifest" 2>/dev/null | awk -F'= ' '{print $2}' | tr -d '(null)' | xargs || echo "N/A")
+        _emit web_apps "    - name: $(_yaml_str "$app_name")"
+        _emit web_apps "      url: $(_yaml_str "$app_url")"
+        _emit web_apps "      last_launch: $(_yaml_str "$last_launch")"
+        _emit web_apps "      profile: $(_yaml_str "$(basename "$profile_dir")")"
+      done
+    done
+
+    # Also check ~/Applications for browser-generated .app wrappers
+    find "$HOME/Applications" -maxdepth 2 -name "*.app" 2>/dev/null | while read -r app; do
+      local info_plist="$app/Contents/Info.plist"
+      [[ -f "$info_plist" ]] || continue
+      local crapp_url
+      crapp_url=$(defaults read "$app/Contents/Info" CrAppModeStartupUrl 2>/dev/null || echo "")
+      [[ -z "$crapp_url" ]] && continue
+      local app_name last_used
+      app_name=$(basename "$app" .app)
+      last_used=$(mdls -name kMDItemLastUsedDate "$app" 2>/dev/null | awk -F'= ' '{print $2}' | tr -d '(null)' | xargs || echo "N/A")
+      _emit web_apps "    - name: $(_yaml_str "$app_name")"
+      _emit web_apps "      url: $(_yaml_str "$crapp_url")"
+      _emit web_apps "      last_used: $(_yaml_str "$last_used")"
+      _emit web_apps "      type: \"app_wrapper\""
+    done
+  done
+}
+
+# ---------------------------------------------------------------------------
+# SECTION: services
+# ---------------------------------------------------------------------------
+collect_services() {
+  _emit services "services:"
+
+  # Running launchd user services
+  _emit services "  launchd_user_running:"
+  launchctl list 2>/dev/null | awk 'NR>1 && $3 != "-" && $1 != "-" {print $3, $1}' | sort | \
+    while read -r label pid; do
+      _emit services "    - label: $(_yaml_str "$label")"
+      _emit services "      pid: $pid"
+    done
+
+  # System-level services (names only, no sensitive detail)
+  _emit services "  launchd_system_loaded:"
+  sudo launchctl list 2>/dev/null | awk 'NR>1 && $3 != "-" {print $3}' | sort | \
+    while read -r label; do
+      _emit services "    - $(_yaml_str "$label")"
+    done || true
+
+  # Listening ports (local only, no remote info)
+  _emit services "  listening_ports:"
+  lsof -iTCP -sTCP:LISTEN -nP 2>/dev/null | awk 'NR>1 {split($9,a,":"); print a[length(a)], $1, $2}' | sort -n | \
+    while read -r port cmd pid; do
+      _emit services "    - port: $port"
+      _emit services "      process: $(_yaml_str "$cmd")"
+      _emit services "      pid: $pid"
+    done
+}
+
+# ---------------------------------------------------------------------------
+# SECTION: startup
+# ---------------------------------------------------------------------------
+collect_startup() {
+  _emit startup "startup:"
+
+  # Login items via AppleScript (most reliable on modern macOS)
+  _emit startup "  login_items:"
+  osascript -e 'tell application "System Events" to get the name of every login item' 2>/dev/null | \
+    tr ',' '\n' | xargs | tr ' ' '\n' | while read -r item; do
+      [[ -n "$item" ]] && _emit startup "    - $(_yaml_str "$item")"
+    done
+
+  # LaunchAgents (user)
+  _emit startup "  launch_agents_user:"
+  local agent_dirs=("$HOME/Library/LaunchAgents" "/Library/LaunchAgents")
+  for dir in "${agent_dirs[@]}"; do
+    [[ -d "$dir" ]] || continue
+    find "$dir" -name "*.plist" 2>/dev/null | while read -r plist; do
+      local label enabled
+      label=$(defaults read "$plist" Label 2>/dev/null || basename "$plist" .plist)
+      enabled=$( (defaults read "$plist" Disabled 2>/dev/null && echo "false") || echo "true")
+      _emit startup "    - label: $(_yaml_str "$label")"
+      _emit startup "      source: $(_yaml_str "$dir")"
+    done
+  done
+
+  # LaunchDaemons (system)
+  _emit startup "  launch_daemons_system:"
+  find "/Library/LaunchDaemons" -name "*.plist" 2>/dev/null | while read -r plist; do
+    local label
+    label=$(defaults read "$plist" Label 2>/dev/null || basename "$plist" .plist)
+    _emit startup "    - $(_yaml_str "$label")"
+  done
+}
+
+# ---------------------------------------------------------------------------
+# SECTION: dev_tools
+# ---------------------------------------------------------------------------
+collect_dev_tools() {
+  _emit dev_tools "dev_tools:"
+
+  # Package managers
+  _emit dev_tools "  package_managers:"
+  for tool in brew port nix; do
+    if command -v "$tool" &>/dev/null; then
+      local ver
+      ver=$($tool --version 2>/dev/null | head -1 || echo "N/A")
+      _emit dev_tools "    - name: $(_yaml_str "$tool")"
+      _emit dev_tools "      version: $(_yaml_str "$ver")"
+    fi
+  done
+
+  # Homebrew formulae (names + versions)
+  if command -v brew &>/dev/null; then
+    _emit dev_tools "  homebrew_formulae:"
+    brew list --formula 2>/dev/null | while read -r formula; do
+      local ver
+      ver=$(brew info "$formula" 2>/dev/null | awk 'NR==1{print $NF}' || echo "N/A")
+      _emit dev_tools "    - name: $(_yaml_str "$formula")"
+      _emit dev_tools "      version: $(_yaml_str "$ver")"
+    done
+  fi
+
+  # Runtimes and tools
+  _emit dev_tools "  runtimes:"
+  local runtime_tools=(
+    "node:node --version"
+    "npm:npm --version"
+    "yarn:yarn --version"
+    "pnpm:pnpm --version"
+    "bun:bun --version"
+    "deno:deno --version"
+    "python3:python3 --version"
+    "python:python --version"
+    "ruby:ruby --version"
+    "go:go version"
+    "java:java -version"
+    "rustc:rustc --version"
+    "cargo:cargo --version"
+    "php:php --version"
+    "swift:swift --version"
+    "kotlin:kotlinc -version"
+    "dart:dart --version"
+    "elixir:elixir --version"
+    "ghc:ghc --version"
+    "clang:clang --version"
+    "gcc:gcc --version"
+  )
+  for entry in "${runtime_tools[@]}"; do
+    local name cmd ver
+    name="${entry%%:*}"
+    cmd="${entry#*:}"
+    if command -v "$name" &>/dev/null; then
+      ver=$(eval "$cmd" 2>&1 | head -1 || echo "N/A")
+      _emit dev_tools "    - name: $(_yaml_str "$name")"
+      _emit dev_tools "      version: $(_yaml_str "$ver")"
+    fi
+  done
+
+  # Version managers
+  _emit dev_tools "  version_managers:"
+  for vm in nvm rbenv pyenv asdf volta fnm; do
+    if command -v "$vm" &>/dev/null || [[ -d "$HOME/.$vm" ]] || [[ -d "$HOME/.${vm}" ]]; then
+      local ver
+      ver=$(command -v "$vm" &>/dev/null && $vm --version 2>/dev/null | head -1 || echo "installed")
+      _emit dev_tools "    - name: $(_yaml_str "$vm")"
+      _emit dev_tools "      version: $(_yaml_str "$ver")"
+    fi
+  done
+
+  # Editors and IDEs
+  _emit dev_tools "  editors:"
+  local editor_tools=(
+    "code:code --version"
+    "cursor:cursor --version"
+    "nvim:nvim --version"
+    "vim:vim --version"
+    "emacs:emacs --version"
+    "nano:nano --version"
+    "subl:subl --version"
+    "zed:zed --version"
+  )
+  for entry in "${editor_tools[@]}"; do
+    local name cmd ver
+    name="${entry%%:*}"
+    cmd="${entry#*:}"
+    if command -v "$name" &>/dev/null; then
+      ver=$(eval "$cmd" 2>&1 | head -1 || echo "N/A")
+      _emit dev_tools "    - name: $(_yaml_str "$name")"
+      _emit dev_tools "      version: $(_yaml_str "$ver")"
+    fi
+  done
+
+  # Cloud / DevOps tools
+  _emit dev_tools "  cloud_devops:"
+  local cloud_tools=(aws gcloud az terraform kubectl helm docker podman fly wrangler vercel netlify supabase)
+  for tool in "${cloud_tools[@]}"; do
+    if command -v "$tool" &>/dev/null; then
+      local ver
+      ver=$($tool --version 2>/dev/null | head -1 || $tool version 2>/dev/null | head -1 || echo "N/A")
+      _emit dev_tools "    - name: $(_yaml_str "$tool")"
+      _emit dev_tools "      version: $(_yaml_str "$ver")"
+    fi
+  done
+
+  # Git config (safe fields only)
+  _emit dev_tools "  git:"
+  if command -v git &>/dev/null; then
+    local git_ver git_user git_email_domain
+    git_ver=$(git --version 2>/dev/null | awk '{print $NF}')
+    git_user=$(git config --global user.name 2>/dev/null || echo "N/A")
+    # Only reveal email domain, not full address
+    local git_email_full
+    git_email_full=$(git config --global user.email 2>/dev/null || echo "")
+    git_email_domain=$(echo "$git_email_full" | awk -F'@' '{print $2}' || echo "N/A")
+    _emit dev_tools "    version: $(_yaml_str "$git_ver")"
+    _emit dev_tools "    user_name: $(_yaml_str "$git_user")"
+    _emit dev_tools "    email_domain: $(_yaml_str "$git_email_domain")"
+    _emit dev_tools "    default_branch: $(_yaml_str "$(git config --global init.defaultBranch 2>/dev/null || echo 'N/A')")"
+    _emit dev_tools "    core_editor: $(_yaml_str "$(git config --global core.editor 2>/dev/null || echo 'N/A')")"
+  fi
+}
+
+# ---------------------------------------------------------------------------
+# SECTION: shell
+# ---------------------------------------------------------------------------
+
+# Extract sourced file paths from a shell rc file (lines with `source` or `.`)
+_extract_sourced_files() {
+  local file="$1"
+  grep -E '^\s*(source|\.)\s+' "$file" 2>/dev/null \
+    | sed -E 's/^\s*(source|\.)\s+//' \
+    | sed 's/[[:space:]].*//' \
+    | sed "s|~|$HOME|g" \
+    | sed "s|\$HOME|$HOME|g" \
+    | while read -r f; do
+        echo "$f"
+      done
+}
+
+# Extract alias definitions from a file
+_extract_aliases() {
+  local file="$1"
+  grep -E '^\s*alias\s+' "$file" 2>/dev/null \
+    | sed -E "s/^\s*alias\s+//" \
+    | awk -F'=' '{print $1}' \
+    | xargs
+}
+
+# Extract function names defined in a file
+_extract_functions() {
+  local file="$1"
+  grep -E '^\s*[a-zA-Z_][a-zA-Z0-9_]*\s*\(\s*\)' "$file" 2>/dev/null \
+    | sed -E 's/\s*\(\s*\).*//' \
+    | xargs
+}
+
+# Extract export lines - names only, no values (could contain secrets)
+_extract_exports() {
+  local file="$1"
+  grep -E '^\s*export\s+' "$file" 2>/dev/null \
+    | sed -E 's/^\s*export\s+//' \
+    | awk -F'=' '{print $1}' \
+    | grep -v -iE '(key|secret|token|pass|pwd|credential|auth|api)' \
+    | xargs
+}
+
+# Extract PATH modifications
+_extract_path_mods() {
+  local file="$1"
+  grep -iE 'PATH=' "$file" 2>/dev/null \
+    | sed "s|$HOME|~|g" \
+    | sed 's/export //' \
+    | while IFS= read -r line; do echo "$line"; done
+}
+
+collect_shell() {
+  _emit shell "shell:"
+
+  local current_shell default_shell shell_ver
+  current_shell="$SHELL"
+  default_shell=$(dscl . -read "/Users/$USER" UserShell 2>/dev/null | awk '{print $2}' || echo "N/A")
+  shell_ver=$($SHELL --version 2>&1 | head -1 || echo "N/A")
+
+  _emit shell "  current: $(_yaml_str "$current_shell")"
+  _emit shell "  default: $(_yaml_str "$default_shell")"
+  _emit shell "  version: $(_yaml_str "$shell_ver")"
+
+  # ---------------------------------------------------------------------------
+  # Session init files - inspect each one found
+  # ---------------------------------------------------------------------------
+  local init_files=(
+    "$HOME/.profile"
+    "$HOME/.bash_profile"
+    "$HOME/.bash_login"
+    "$HOME/.bashrc"
+    "$HOME/.bash_aliases"
+    "$HOME/.bash_logout"
+    "$HOME/.inputrc"
+    "$HOME/.hushlogin"
+  )
+
+  _emit shell "  init_files:"
+  for f in "${init_files[@]}"; do
+    [[ -f "$f" ]] || continue
+    local fname size mtime
+    fname=$(basename "$f")
+    size=$(wc -l < "$f" | xargs)
+    mtime=$(stat -f "%Sm" -t "%Y-%m-%d" "$f" 2>/dev/null || echo "N/A")
+
+    _emit shell "    $fname:"
+    _emit shell "      lines: $size"
+    _emit shell "      last_modified: $(_yaml_str "$mtime")"
+
+    # Sourced files (names/paths only)
+    local sourced
+    sourced=$(_extract_sourced_files "$f")
+    if [[ -n "$sourced" ]]; then
+      _emit shell "      sources:"
+      echo "$sourced" | while read -r s; do
+        [[ -n "$s" ]] && _emit shell "        - $(_yaml_str "$s")"
+      done
+    fi
+
+    # PATH modifications
+    local path_mods
+    path_mods=$(_extract_path_mods "$f")
+    if [[ -n "$path_mods" ]]; then
+      _emit shell "      path_modifications:"
+      echo "$path_mods" | while IFS= read -r line; do
+        [[ -n "$line" ]] && _emit shell "        - $(_yaml_str "$line")"
+      done
+    fi
+
+    # Exported var names (secrets filtered out)
+    local exports
+    exports=$(_extract_exports "$f")
+    if [[ -n "$exports" ]]; then
+      _emit shell "      exported_vars: $(_yaml_str "$exports")"
+    fi
+
+    # Alias names (names only, not their values - could expose paths/tokens)
+    local aliases
+    aliases=$(_extract_aliases "$f")
+    if [[ -n "$aliases" ]]; then
+      _emit shell "      alias_names: $(_yaml_str "$aliases")"
+    fi
+
+    # Function names
+    local funcs
+    funcs=$(_extract_functions "$f")
+    if [[ -n "$funcs" ]]; then
+      _emit shell "      function_names: $(_yaml_str "$funcs")"
+    fi
+  done
+
+  # ---------------------------------------------------------------------------
+  # Runtime env snapshot
+  # ---------------------------------------------------------------------------
+
+  # PS1 - reveals prompt tooling (git hooks, python env indicators, etc.)
+  local ps1_val="${PS1:-}"
+  ps1_val=$(echo "$ps1_val" | sed "s|$HOME|~|g")
+  _emit shell "  ps1_raw: $(_yaml_str "$ps1_val")"
+
+  # PATH - deduplicated, home dir masked, in load order (not sorted)
+  _emit shell "  path_entries:"
+  echo "$PATH" | tr ':' '\n' | awk '!seen[$0]++' | sed "s|$HOME|~|g" | while read -r p; do
+    _emit shell "    - $(_yaml_str "$p")"
+  done
+
+  # Safe env vars
+  _emit shell "  env_vars:"
+  local safe_vars=(LANG LC_ALL LC_CTYPE TERM TERM_PROGRAM TERM_PROGRAM_VERSION
+                   COLORTERM EDITOR VISUAL PAGER LESS HISTSIZE HISTFILESIZE
+                   HISTCONTROL HISTIGNORE BASH_VERSION BASH_VERSINFO
+                   PROMPT_COMMAND MANPATH INFOPATH)
+  for var in "${safe_vars[@]}"; do
+    local val="${!var:-}"
+    [[ -n "$val" ]] && _emit shell "    $var: $(_yaml_str "$val")"
+  done
+
+  # PROMPT_COMMAND deserves its own field - it runs on every prompt and can tank perf
+  local pc="${PROMPT_COMMAND:-}"
+  if [[ -n "$pc" ]]; then
+    pc=$(echo "$pc" | sed "s|$HOME|~|g")
+    _emit shell "  prompt_command: $(_yaml_str "$pc")"
+  fi
+
+  # ---------------------------------------------------------------------------
+  # Cron jobs (user)
+  # ---------------------------------------------------------------------------
+  _emit shell "  crontab:"
+  local cron_raw
+  cron_raw=$(crontab -l 2>/dev/null || echo "")
+  if [[ -z "$cron_raw" ]]; then
+    _emit shell "    empty: true"
+  else
+    local cron_count
+    cron_count=$(echo "$cron_raw" | grep -cv '^\s*#' || echo "0")
+    _emit shell "    job_count: $cron_count"
+    _emit shell "    jobs:"
+    echo "$cron_raw" | grep -v '^\s*#' | grep -v '^\s*$' | while IFS= read -r line; do
+      # Mask home dir in command part, keep schedule visible
+      line=$(echo "$line" | sed "s|$HOME|~|g")
+      _emit shell "      - $(_yaml_str "$line")"
+    done
+  fi
+
+  # System-level cron dirs (names only, no content)
+  _emit shell "  cron_system_dirs:"
+  for cron_dir in /etc/cron.d /etc/cron.daily /etc/cron.hourly /etc/cron.weekly /etc/cron.monthly; do
+    [[ -d "$cron_dir" ]] || continue
+    local entries
+    entries=$(ls "$cron_dir" 2>/dev/null | tr '\n' ' ' | xargs)
+    [[ -n "$entries" ]] && _emit shell "    $cron_dir: $(_yaml_str "$entries")"
+  done
+
+  # launchd-based scheduled tasks (periodic)
+  _emit shell "  launchd_periodic:"
+  for period in daily weekly monthly; do
+    local count
+    count=$(ls "/etc/periodic/$period" 2>/dev/null | wc -l | xargs || echo "0")
+    _emit shell "    $period: $count scripts"
+  done
+
+  # ---------------------------------------------------------------------------
+  # dot_files_system - run files_debug_run if available
+  # ---------------------------------------------------------------------------
+  _emit shell "  dot_files_system:"
+
+  if declare -f files_debug_run > /dev/null 2>&1; then
+    local debug_output
+    debug_output=$(files_debug_run 2>&1)
+
+    # Extract FILESROOT and FILESBASHD
+    local filesroot filesbashd
+    filesroot=$(echo "$debug_output" | grep '\$FILESROOT=' | sed 's/.*\$FILESROOT=//' | xargs | sed "s|$HOME|~|g")
+    filesbashd=$(echo "$debug_output" | grep '\$FILESBASHD=' | sed 's/.*\$FILESBASHD=//' | xargs | sed "s|$HOME|~|g")
+
+    _emit shell "    available: true"
+    [[ -n "$filesroot" ]]  && _emit shell "    files_root: $(_yaml_str "$filesroot")"
+    [[ -n "$filesbashd" ]] && _emit shell "    files_bashd: $(_yaml_str "$filesbashd")"
+
+    # Parse with awk - group scripts by directory, capture inline messages
+    local awk_output
+    awk_output=$(echo "$debug_output" | awk -v home="$HOME" '
+      /initialization scripts found in / {
+        count = $0; gsub(/.*] /, "", count); split(count, c, " "); cnt = c[1]
+        dir = $0; gsub(/.*found in /, "", dir); gsub(/^[ \t]+|[ \t]+$/, "", dir)
+        gsub(home, "~", dir)
+        print "DIR:" dir
+        print "COUNT:" cnt
+        next
+      }
+      /Running script:/ {
+        path = $0; gsub(/.*Running script: /, "", path); gsub(/^[ \t]+|[ \t]+$/, "", path)
+        gsub(home, "~", path)
+        print "SCRIPT:" path
+        next
+      }
+      /\[[0-9]{2}:[0-9]{2}:[0-9]{2} [^]]+\.sh\]/ {
+        tag = $0; gsub(/.*\[/, "", tag); gsub(/\].*/, "", tag); split(tag, t, " "); tag = t[2]
+        if (tag == "run_bash") next
+        msg = $0; gsub(/.*\] /, "", msg); gsub(/^[ \t]+|[ \t]+$/, "", msg)
+        gsub(home, "~", msg)
+        print "MSG:" tag ": " msg
+        next
+      }
+    ')
+
+    _emit shell "    script_directories:"
+    while IFS= read -r awk_line; do
+      case "$awk_line" in
+        DIR:*)   _emit shell "      - path: $(_yaml_str "${awk_line#DIR:}")" ;;
+        COUNT:*) _emit shell "        script_count: ${awk_line#COUNT:}"
+                 _emit shell "        scripts:" ;;
+        SCRIPT:*) _emit shell "          - $(_yaml_str "${awk_line#SCRIPT:}")" ;;
+        MSG:*)   _emit shell "            # ${awk_line#MSG:}" ;;
+      esac
+    done <<< "$awk_output"
+
+  else
+    _emit shell "    available: false"
+    _emit shell "    note: \"files_debug_run not found - source your bash init files before running\""
+  fi
+}
+
+# ---------------------------------------------------------------------------
+# SECTION: resources
+# ---------------------------------------------------------------------------
+collect_resources() {
+  _emit resources "resources:"
+
+  # CPU usage snapshot
+  local cpu_idle cpu_used
+  cpu_idle=$(top -l 1 -n 0 2>/dev/null | awk '/CPU usage/{gsub(/%/,""); for(i=1;i<=NF;i++) if($i=="idle,") print $(i-1)}' || echo "N/A")
+  if [[ "$cpu_idle" != "N/A" ]]; then
+    cpu_used=$(echo "100 - $cpu_idle" | bc 2>/dev/null || echo "N/A")
+  else
+    cpu_used="N/A"
+  fi
+  _emit resources "  cpu:"
+  _emit resources "    used_percent: $(_yaml_str "$cpu_used")"
+
+  # Memory
+  local mem_total mem_used mem_free
+  mem_total=$(sysctl -n hw.memsize 2>/dev/null | awk '{printf "%.1f GB", $1/1073741824}' || echo "N/A")
+  local vm_stat
+  vm_stat=$(vm_stat 2>/dev/null)
+  local page_size free_pages active_pages wired_pages compressed
+  page_size=$(echo "$vm_stat" | awk '/page size/{print $8}' || echo "4096")
+  free_pages=$(echo "$vm_stat" | awk '/Pages free/{gsub(/\./,""); print $3}' || echo "0")
+  active_pages=$(echo "$vm_stat" | awk '/Pages active/{gsub(/\./,""); print $3}' || echo "0")
+  wired_pages=$(echo "$vm_stat" | awk '/Pages wired/{gsub(/\./,""); print $4}' || echo "0")
+  compressed=$(echo "$vm_stat" | awk '/Pages occupied by compressor/{gsub(/\./,""); print $5}' || echo "0")
+  mem_free=$(echo "scale=1; $free_pages * $page_size / 1073741824" | bc 2>/dev/null || echo "N/A")
+  mem_wired=$(echo "scale=1; $wired_pages * $page_size / 1073741824" | bc 2>/dev/null || echo "N/A")
+  mem_compressed=$(echo "scale=1; $compressed * $page_size / 1073741824" | bc 2>/dev/null || echo "N/A")
+  _emit resources "  memory:"
+  _emit resources "    total: $(_yaml_str "$mem_total")"
+  _emit resources "    free_gb: $(_yaml_str "${mem_free} GB")"
+  _emit resources "    wired_gb: $(_yaml_str "${mem_wired} GB")"
+  _emit resources "    compressed_gb: $(_yaml_str "${mem_compressed} GB")"
+
+  # Swap
+  local swap_info
+  swap_info=$(sysctl -n vm.swapusage 2>/dev/null || echo "N/A")
+  _emit resources "  swap: $(_yaml_str "$swap_info")"
+
+  # Top 10 processes by CPU
+  _emit resources "  top_processes_by_cpu:"
+  ps aux 2>/dev/null | sort -rk3 | awk 'NR>1 && NR<=11 {print $3, $11}' | while read -r cpu cmd; do
+    cmd_name=$(basename "$cmd")
+    _emit resources "    - process: $(_yaml_str "$cmd_name")"
+    _emit resources "      cpu_percent: $(_yaml_str "$cpu")"
+  done
+
+  # Top 10 processes by RAM
+  _emit resources "  top_processes_by_ram:"
+  ps aux 2>/dev/null | sort -rk4 | awk 'NR>1 && NR<=11 {print $4, $11}' | while read -r mem cmd; do
+    cmd_name=$(basename "$cmd")
+    _emit resources "    - process: $(_yaml_str "$cmd_name")"
+    _emit resources "      mem_percent: $(_yaml_str "$mem")"
+  done
+
+  # Thermal state
+  local thermal
+  thermal=$(pmset -g therm 2>/dev/null | awk -F'= ' '/CPU_Speed_Limit/{print $2}' || echo "N/A")
+  _emit resources "  thermal:"
+  _emit resources "    cpu_speed_limit_percent: $(_yaml_str "$thermal")"
+
+  # Power assertions (what's preventing sleep)
+  _emit resources "  power_assertions:"
+  pmset -g assertions 2>/dev/null | grep -E 'PreventUserIdleSystemSleep|PreventUserIdleDisplaySleep' | \
+    awk '{print $1, $2}' | while read -r type count; do
+      _emit resources "    - type: $(_yaml_str "$type")"
+      _emit resources "      count: $count"
+    done
+}
+
+# ---------------------------------------------------------------------------
+# All sections registry
+# ---------------------------------------------------------------------------
+ALL_SECTIONS=(hardware os storage network devices apps web_apps services startup dev_tools shell resources)
+
+# ---------------------------------------------------------------------------
+# Main: collect and output
+# ---------------------------------------------------------------------------
+main() {
+  local sections_to_run=()
+
+  if [[ -n "$SECTION" ]]; then
+    sections_to_run=("$SECTION")
+  else
+    sections_to_run=("${ALL_SECTIONS[@]}")
+  fi
+
+  # Run collectors
+  for section in "${sections_to_run[@]}"; do
+    local fn="collect_${section//-/_}"
+    if declare -f "$fn" > /dev/null; then
+      "$fn"
+    else
+      echo "Unknown section: $section" >&2
+      exit 1
+    fi
+  done
+
+  # Output
+  if $SPLIT_OUTPUT; then
+    [[ -z "$FILENAME" ]] && { echo "--split-output requires --filename" >&2; exit 1; }
+    for section in "${sections_to_run[@]}"; do
+      local out_file
+      out_file=$(_section_file "$section")
+      if [[ -n "${SECTION_CONTENT[$section]+_}" ]]; then
+        echo "# sysreport - section: $section" > "$out_file"
+        printf '%s' "${SECTION_CONTENT[$section]}" >> "$out_file"
+        echo "Written: $out_file" >&2
+      fi
+    done
+  elif [[ -n "$FILENAME" ]]; then
+    local base
+    base=$(_base_name "$FILENAME")
+    local out_file="${base}.yaml"
+    {
+      echo "# sysreport - generated: $(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+      for section in "${sections_to_run[@]}"; do
+        [[ -n "${SECTION_CONTENT[$section]+_}" ]] && printf '%s' "${SECTION_CONTENT[$section]}"
+      done
+    } > "$out_file"
+    echo "Written: $out_file" >&2
+  else
+    echo "# sysreport - generated: $(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+    for section in "${sections_to_run[@]}"; do
+      [[ -n "${SECTION_CONTENT[$section]+_}" ]] && printf '%s' "${SECTION_CONTENT[$section]}"
+    done
+  fi
+}
+
+main
