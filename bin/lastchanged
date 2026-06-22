@@ -5,4 +5,26 @@ if [ -z $1 ]; then
     COUNT=5;
 fi
 
-find . -type f -printf '%T@ %TY-%Tm-%Td %TH:%TM:%.2TS %p\n' | sort -nr | head -n $COUNT | cut -f2- -d" "
+# `find` will list all files in the current dir and `stat` them
+# `stat` will bring:
+#   %Y = the last modified time in seconds since epoch (so we can sort)
+#   %y = the last modified time in human readable format
+#   %n = the file name
+# `head`` will limit the output to the top $COUNT files
+# the `sed`s will:
+#   remove the millisseconds (used to sort) from the timestamp
+#   clean the human-readable timestamp removing nanoseconds and timezone
+
+find . -type f -exec stat --printf="%Y %y %n\n" {} + \
+    | sort -nr \
+    | head -n "$COUNT" \
+    | sed 's/^[^ ]* //' \
+    | sed 's/\.[0-9]* +[0-9]*//'
+
+
+# -------------
+# previous version was just this, but not working for various
+# environments because not every version of `find` supports `-printf`
+# keeping it here for reference until I can fully ditch it
+#find . -type f -printf '%T@ %TY-%Tm-%Td %TH:%TM:%.2TS %p\n' | sort -nr | head -n $COUNT | cut -f2- -d" "
+# -------------
