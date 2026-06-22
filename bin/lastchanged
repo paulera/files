@@ -1,9 +1,17 @@
 #!/bin/bash
 
-COUNT=$1;
+IGNORE_DIRS=(".git" ".vscode" ".idea" "vendor" "node_modules")
+
+COUNT=$1
 if [ -z $1 ]; then
-    COUNT=5;
+    COUNT=5
 fi
+
+EXCLUDES=""
+for dir in "${IGNORE_DIRS[@]}"; do
+    EXCLUDES=$EXCLUDES" -name $dir -o"
+done
+EXCLUDES="${EXCLUDES% -o}"
 
 # `find` will list all files in the current dir and `stat` them
 # `stat` will bring:
@@ -15,14 +23,10 @@ fi
 #   remove the millisseconds (used to sort) from the timestamp
 #   clean the human-readable timestamp removing nanoseconds and timezone
 
-find . -type f -exec stat --printf="%Y %y %n\n" {} + \
+find . -type d \( ${EXCLUDES} \) -prune -o -type f -exec stat --printf="%y %n\n" {} + \
     | sort -nr \
     | head -n "$COUNT" \
-    | sed 's/^[^ ]* //' \
     | sed 's/\.[0-9]* +[0-9]*//'
-
-
-# -------------
 # previous version was just this, but not working for various
 # environments because not every version of `find` supports `-printf`
 # keeping it here for reference until I can fully ditch it
