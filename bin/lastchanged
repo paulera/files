@@ -1,17 +1,64 @@
 #!/bin/bash
 
-IGNORE_DIRS=(".git" ".vscode" ".idea" "vendor" "node_modules")
+COUNT=5
+DIR="$PWD"
+RECURSIVE=false
+EXCLUDES=""
 
-COUNT=$1
-if [ -z $1 ]; then
-    COUNT=5
+show_help() {
+    echo "Usage: $(basename "$0") [options]"
+    echo ""
+    echo "Options:"
+    echo "  -c, --count <n>      Number of files to list (default: 5)"
+    echo "  -d, --dir <dir>      Directory to list (default: current directory)"
+    echo "  -i, --ignore <dir>   Directory name to ignore (repeatable)"
+    echo "  -r, --recursive      List files recursively"
+    echo "      --help           Show this help message"
+}
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -c|--count)
+            COUNT="$2"
+            shift 2
+            ;;
+        -d|--dir)
+            DIR="$2"
+            shift 2
+            ;;
+        -i|--ignore)
+            EXCLUDES=$EXCLUDES" -name $2 -o"
+            shift 2
+            ;;
+        -r|--recursive)
+            RECURSIVE=true
+            shift
+            ;;
+        --help)
+            show_help
+            exit 0
+            ;;
+        *)
+            echo "Unknown option: $1"
+            show_help
+            exit 1
+            ;;
+    esac
+done
+
+if ! [[ "$COUNT" =~ ^[0-9]+$ ]] || [[ "$COUNT" -le 0 ]]; then
+    echo "Invalid count: $COUNT"
+    exit 1
 fi
 
-EXCLUDES=""
-for dir in "${IGNORE_DIRS[@]}"; do
-    EXCLUDES=$EXCLUDES" -name $dir -o"
-done
-EXCLUDES="${EXCLUDES% -o}"
+if [[ ! -d "$DIR" ]]; then
+    echo "Directory not found: $DIR"
+    exit 1
+fi
+
+if [[ -n "$EXCLUDES" ]]; then
+    EXCLUDES="${EXCLUDES% -o}"
+fi
 
 # `find` will list all files in the current dir and `stat` them
 # `stat` will bring:
@@ -23,10 +70,21 @@ EXCLUDES="${EXCLUDES% -o}"
 #   remove the millisseconds (used to sort) from the timestamp
 #   clean the human-readable timestamp removing nanoseconds and timezone
 
-find . -type d \( ${EXCLUDES} \) -prune -o -type f -exec stat --printf="%y %n\n" {} + \
+FIND_SCOPE=()
+if [[ "$RECURSIVE" == true ]]; then
+    if [[ -n "$EXCLUDES" ]]; then
+        FIND_SCOPE=(-type d \( ${EXCLUDES} \) -prune -o -type f)
+    else
+        FIND_SCOPE=(-type f)
+    fi
+else
+    FIND_SCOPE=(-maxdepth 1 -type f)
+fi
+
+find "$DIR" "${FIND_SCOPE[@]}" -exec stat --printf="%Y %y %n\n" {} + \
     | sort -nr \
     | head -n "$COUNT" \
-    | sed 's/\.[0-9]* +[0-9]*//'
+    | sed 's/^[0-9]* //; s/\.[0-9]* +[0-9]*//'
 # previous version was just this, but not working for various
 # environments because not every version of `find` supports `-printf`
 # keeping it here for reference until I can fully ditch it
