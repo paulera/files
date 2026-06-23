@@ -1,0 +1,158 @@
+#!/bin/bash
+
+PROJECT_KEY=""
+SHOW_WIP="false"
+SHOW_FOLLOW="false"
+SHOW_BLOCKED="false"
+SHOW_LINKS="false"
+SHOW_URL="false"
+
+show_help() {
+    echo "Usage: $(basename "$0") [options]"
+    echo ""
+    echo "Options:"
+    echo "  -p, --project             Project key to filter issues"
+    echo "  -w, --wip                 Show items In Progress"
+    echo "  -f, --follow              Show items in Follow Up"
+    echo "  -b, --blocked             Show items that are Blocked"
+    echo "  -l, --links               Show weblinks"
+    echo "  -u, --url                 Show items URL"
+    echo "                            (if none of -w, -f or -b are specified, all will be shown)"
+    echo "      --help                Show this help message"
+}
+
+# parse params
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -p|--project)
+            PROJECT_KEY="$2"
+            shift 2
+            ;;
+        -w|--wip)
+            SHOW_WIP=true
+            shift
+            ;;
+        -f|--follow)
+            SHOW_FOLLOW=true
+            shift
+            ;;
+        -b|--blocked)
+            SHOW_BLOCKED=true
+            shift
+            ;;
+        -l|--links)
+            SHOW_LINKS=true
+            shift
+            ;;
+        -u|--url)
+            SHOW_URL=true
+            shift
+            ;;
+        --help)
+            show_help
+            exit 0
+            ;;
+        *)
+            echo "Unknown option: $1"
+            show_help
+            exit 1
+            ;;
+    esac
+done
+
+# parse variables
+
+if [ -z "$PROJECT_KEY" ]; then
+    echo "Error: Project key is required."
+    show_help
+    exit 1
+fi
+
+if [ "$SHOW_WIP" == "false" ] && [ "$SHOW_FOLLOW" == "false" ] && [ "$SHOW_BLOCKED" == "false" ]; then
+    SHOW_WIP=true
+    SHOW_FOLLOW=true
+    SHOW_BLOCKED=true
+fi
+
+# check for environment variables
+
+if [ -z "$JIRA_URL" ]; then
+    echo "Error: JIRA_URL environment variable is not set."
+fi
+
+if [ -z "$JIRA_USER" ]; then
+    echo "Error: JIRA_USER environment variable is not set."
+fi
+
+if [ -z "$JIRA_API_TOKEN" ]; then
+    echo "Error: JIRA_API_TOKEN environment variable is not set."
+fi
+
+if [ -z "$JIRA_URL" ] || [ -z "$JIRA_USER" ] || [ -z "$JIRA_API_TOKEN" ]; then
+    exit 1
+fi
+
+[ "$SHOW_WIP" = "true" ] && wip=$(jql "Project=${PROJECT_KEY} AND status in ('In Progress')" --fields "key,summary,duedate" --raw)
+[ "$SHOW_FOLLOW" = "true" ] && fup=$(jql "Project=${PROJECT_KEY} AND status in ('Follow up')" --fields "key,summary,duedate" --raw)
+[ "$SHOW_BLOCKED" = "true" ] && blk=$(jql "Project=${PROJECT_KEY} AND status in ('Blocked')" --fields "key,summary,duedate" --raw)
+
+get_linked_urls() {
+    KEY=$1
+    curl -sS \
+        -u "$JIRA_USER:$JIRA_API_TOKEN" \
+        -H "Accept: application/json" \
+        "${JIRA_URL}/rest/api/3/issue/${KEY}/remotelink" \
+        | jq -r '.[].object.url'
+}
+
+print_items_from_resultset() {
+    resultset="$1"
+    if [ ! -z "$2" ]; then
+        colour="${2}"
+    else
+        colour="${cWhite}"
+    fi
+
+    while IFS= read -r line; do
+        IFS='|' read -r key summary duedate <<< "$line"
+        printf "    ${colour}*${c0} $summary"
+        if [ "$duedate" != "None" ]; then
+            printf " ${cWhite}[$duedate]${c0}"
+        fi
+
+        if [ "$SHOW_URL" = "true" ]; then
+            printf ' - '"${JIRA_URL}/browse/${key}"
+        fi
+
+        printf '\n'
+
+        if [ "$SHOW_LINKS" = "true" ]; then 
+            linked_urls=$(get_linked_urls "$key")
+            if [ ! -z "$linked_urls" ]; then
+                while IFS= read -r url; do
+                    printf "      > $url\n"
+                done <<< "$linked_urls"
+            fi
+        fi
+
+    done <<< "$resultset"
+}
+
+if [ ! -z "$wip" ]; then
+    printf "▶️ ${cCyan}In Progress:${c0}\n"
+    print_items_from_resultset "$wip" "$cCyan"
+    printf "\n"
+fi
+
+if [ ! -z "$fup" ]; then
+    printf "⚠️ ${cYellow}Follow Up:${c0}\n"
+    print_items_from_resultset "$fup" "$cYellow"
+    printf "\n"
+fi
+
+if [ ! -z "$blk" ]; then
+    printf "⛔ ${cRed}Blocked:${c0}\n"
+    print_items_from_resultset "$blk" "$cRed"
+    printf "\n"
+fi
