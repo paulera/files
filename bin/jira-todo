@@ -6,6 +6,8 @@ SHOW_FOLLOW="false"
 SHOW_BLOCKED="false"
 SHOW_LINKS="false"
 SHOW_URL="false"
+SHOW_NOTE="false"
+NOTES_FIELD=""
 
 show_help() {
     echo "Usage: $(basename "$0") [options]"
@@ -18,6 +20,8 @@ show_help() {
     echo "  -l, --links               Show weblinks"
     echo "  -u, --url                 Show items URL"
     echo "                            (if none of -w, -f or -b are specified, all will be shown)"
+    echo "  -n, --notes               Diplay notes (requires --notes-field)"
+    echo "      --notes-field         Defines from which field must read notes"
     echo "      --help                Show this help message"
 }
 
@@ -49,6 +53,13 @@ while [[ $# -gt 0 ]]; do
             SHOW_URL=true
             shift
             ;;
+        -n|--notes)
+            SHOW_NOTES=true
+            shift
+            ;;
+        --notes-field)
+            NOTES_FIELD="$2"
+            shift 2;;
         --help)
             show_help
             exit 0
@@ -75,6 +86,12 @@ if [ "$SHOW_WIP" == "false" ] && [ "$SHOW_FOLLOW" == "false" ] && [ "$SHOW_BLOCK
     SHOW_BLOCKED=true
 fi
 
+if [ "$SHOW_NOTES" == "true" ] && [ -z "$NOTES_FIELD" ]; then
+    echo "-n,--notes requires --notes-field."
+    show_help
+    exit 1
+fi
+
 # check for environment variables
 
 if [ -z "$JIRA_URL" ]; then
@@ -93,9 +110,13 @@ if [ -z "$JIRA_URL" ] || [ -z "$JIRA_USER" ] || [ -z "$JIRA_API_TOKEN" ]; then
     exit 1
 fi
 
-[ "$SHOW_WIP" = "true" ] && wip=$(jql "Project=${PROJECT_KEY} AND status in ('In Progress')" --fields "key,summary,duedate" --raw)
-[ "$SHOW_FOLLOW" = "true" ] && fup=$(jql "Project=${PROJECT_KEY} AND status in ('Follow up')" --fields "key,summary,duedate" --raw)
-[ "$SHOW_BLOCKED" = "true" ] && blk=$(jql "Project=${PROJECT_KEY} AND status in ('Blocked')" --fields "key,summary,duedate" --raw)
+if [ ! -z "$NOTES_FIELD" ]; then
+    NOTES_FIELD=",$NOTES_FIELD"
+fi
+
+[ "$SHOW_WIP" = "true" ] && wip=$(jql "Project=${PROJECT_KEY} AND status in ('In Progress')" --fields "key,summary,duedate,$NOTES_FIELD" --raw)
+[ "$SHOW_FOLLOW" = "true" ] && fup=$(jql "Project=${PROJECT_KEY} AND status in ('Follow up')" --fields "key,summary,duedate,$NOTES_FIELD" --raw)
+[ "$SHOW_BLOCKED" = "true" ] && blk=$(jql "Project=${PROJECT_KEY} AND status in ('Blocked')" --fields "key,summary,duedate,$NOTES_FIELD" --raw)
 
 get_linked_urls() {
     KEY=$1
@@ -115,7 +136,7 @@ print_items_from_resultset() {
     fi
 
     while IFS= read -r line; do
-        IFS='|' read -r key summary duedate <<< "$line"
+        IFS='|' read -r key summary duedate notes <<< "$line"
         printf "    ${colour}*${c0} $summary"
         if [ "$duedate" != "None" ]; then
             printf " ${cWhite}[$duedate]${c0}"
@@ -126,12 +147,16 @@ print_items_from_resultset() {
         fi
 
         printf '\n'
+        
+        if [ "$notes" != "None" ]; then
+            printf "      :: ${cWhite}$notes${c0}\n"        
+        fi
 
         if [ "$SHOW_LINKS" = "true" ]; then 
             linked_urls=$(get_linked_urls "$key")
             if [ ! -z "$linked_urls" ]; then
                 while IFS= read -r url; do
-                    printf "      > $url\n"
+                    printf "      >> $url\n"
                 done <<< "$linked_urls"
             fi
         fi

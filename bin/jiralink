@@ -1,6 +1,6 @@
 #!/bin/bash
 
-if [ "$1" == "--markdown" ] || [ "$1" == "-m" ]; then
+if [ "$1" == "--markdown" ] || [ "$1" == "-m" ] || [ "$1" == "--md" ]; then
     cat | \
     sed 's/\[/ /g' | \
     sed 's/\]/ - /g' | \

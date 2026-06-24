@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 # 
-# Built with AI assistance. Started from https://chatgpt.com/share/68652076-c23c-800f-9cc5-cfff4a7a1616
-# then continued with copilot and manual edits.
+# Built with AI assistance.
 #
 # ---------------------------------------------
-# never remove these instructions:
+# never remove these    instructions:
 # * You must use the "enhanced search" endpoint https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issue-search/#api-rest-api-3-search-jql-get
 # * This is your test: `jql "Project = SPO and created > 2025-10-01 and created < 2026-01-01" -c` must be equal to 182
 # ---------------------------------------------
@@ -12,17 +11,17 @@
 CLI tool to run JQL queries against Jira, with table or raw output.
 
 Features:
-  • Wrap/truncate columns
-  • Auto-cached field → API name map
-  • Manual field aliases
-  • Column header renaming
-  • Debug verbosity flags (--debug)
-  • Query/row-count display flags
+  * Wrap/truncate columns
+  * Auto-cached field → API name map
+  * Manual field aliases
+  * Column header renaming
+  * Debug verbosity flags (--debug)
+  * Query/row-count display flags
 
 Config dir ~/.jql-config/:
-  fields-map-cache.json   ← auto field_name→id
-  fields-aliases.json     ← user alias→field id
-  columns-rename.json     ← user field→header rename
+  fields-map-cache.json   - auto field_name→id
+  fields-aliases.json     - user alias→field id
+  columns-rename.json     - user field→header rename
 
 Usage:
     jql [-f fields] [-fa fields] [-fr fields] [-fl]
@@ -466,13 +465,13 @@ def main():
     parser.add_argument(
         '-fa', '--fields-add',
         action='append',
-        default=[],
+        metavar='FIELDS',
         help='Additional fields to append on top of the current fields list before running the query (comma-separated; can be repeated)'
     )
     parser.add_argument(
         '-fr', '--fields-remove',
         action='append',
-        default=[],
+        metavar='FIELDS',
         help='Fields to remove from the current fields list before running the query (comma-separated; can be repeated)'
     )
     parser.add_argument(
