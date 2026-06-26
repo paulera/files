@@ -117,3 +117,21 @@ au BufNewFile,BufRead *.ino set filetype=c
 " Keep visual selection after indenting
 :vnoremap < <gv
 :vnoremap > >gv
+
+
+" Function to facilitate comment and uncomment. leader key -> / or \ -> char to add or remove at the begin of line
+
+function! s:LinePrefix(action) range
+    echo a:action.' char: '
+    let char = nr2char(getchar())
+    if a:action == 'Prepend'
+        silent execute a:firstline.','.a:lastline.'s/^/'.escape(char, '/\&~').'/'
+    elseif a:action == 'Remove'
+        silent execute a:firstline.','.a:lastline.'s/^'.escape(char, '/\.*$^~[]').'//e'
+    elseif a:action == 'Whatever'
+        echo 'not implemented'
+    endif
+    nohlsearch
+endfunction
+vnoremap <leader>/ :call <SID>LinePrefix('Prepend')<cr>
+vnoremap <leader>\ :call <SID>LinePrefix('Remove')<cr>
