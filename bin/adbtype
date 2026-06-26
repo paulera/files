@@ -1,0 +1,60 @@
+#!/bin/bash
+# AI: Claude (Anthropic)
+# Reads a string from stdin and types it into the focused field of an ADB-connected device.
+# Uses `input text` for safe chars and `input keyevent` for special chars.
+# Usage: echo 'your text' | ./adb_type.sh [-s <device>]
+
+ADB_OPTS=""
+DELETE_COUNT=0
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -s) ADB_OPTS="-s $2"; shift 2 ;;
+    --delete) DELETE_COUNT="$2"; shift 2 ;;
+    *) shift ;;
+  esac
+done
+
+adb_key() {
+  adb $ADB_OPTS shell input keyevent "$1"
+}
+
+adb_text() {
+  adb $ADB_OPTS shell input text "$1"
+}
+
+if [ "$DELETE_COUNT" -gt 0 ]; then
+  i=0
+  while [ $i -lt "$DELETE_COUNT" ]; do
+    adb_key KEYCODE_DEL
+    i=$((i + 1))
+  done
+  exit 0
+fi
+
+input_str=$(cat; echo x)
+input_str="${input_str%x}"
+
+i=0
+while [ $i -lt ${#input_str} ]; do
+  char="${input_str:$i:1}"
+  case "$char" in
+    $'\n') adb_key KEYCODE_ENTER ;;
+    ' ') adb_key KEYCODE_SPACE ;;
+    '`') adb_key KEYCODE_GRAVE ;;
+    '-') adb_key KEYCODE_MINUS ;;
+    '=') adb_key KEYCODE_EQUALS ;;
+    '[') adb_key KEYCODE_LEFT_BRACKET ;;
+    ']') adb_key KEYCODE_RIGHT_BRACKET ;;
+    '\') adb_key KEYCODE_BACKSLASH ;;
+    ';') adb_key KEYCODE_SEMICOLON ;;
+    "'") adb_key KEYCODE_APOSTROPHE ;;
+    '/') adb_key KEYCODE_SLASH ;;
+    ',') adb_key KEYCODE_COMMA ;;
+    '.') adb_key KEYCODE_PERIOD ;;
+    '(') adb_key KEYCODE_NUMPAD_LEFT_PAREN ;;
+    ')') adb_key KEYCODE_NUMPAD_RIGHT_PAREN ;;
+    *)   adb_text "$char" ;;
+  esac
+  i=$((i + 1))
+done
