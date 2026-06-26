@@ -1,0 +1,8 @@
+#!/bin/bash
+
+json=$(cat)
+
+echo "$json" \
+  | jq -r '[first|keys_unsorted] + map([.[]]) | .[] | @tsv' \
+  | awk 'NR==1{print; gsub(/[^\t]/, "-"); print} NR>1' \
+  | column -t -s $'\t'

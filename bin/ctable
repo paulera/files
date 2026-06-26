@@ -1,0 +1,9 @@
+#!/bin/bash
+
+csv=$(cat)
+
+tsv=$(echo "$csv" | sed 's/"//g; s/,/\t/g')
+
+echo "$tsv" \
+  | awk 'NR==1{print; gsub(/[^\t]/, "-"); print} NR>1' \
+  | column -t -s $'\t'
