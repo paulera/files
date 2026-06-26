@@ -5,6 +5,7 @@ SHOW_WIP="false"
 SHOW_FOLLOW="false"
 SHOW_BLOCKED="false"
 SHOW_LINKS="false"
+SHOW_KEY="false"
 SHOW_URL="false"
 SHOW_NOTE="false"
 NOTES_FIELD=""
@@ -18,6 +19,7 @@ show_help() {
     echo "  -f, --follow              Show items in Follow Up"
     echo "  -b, --blocked             Show items that are Blocked"
     echo "  -l, --links               Show weblinks"
+    echo "  -k, --key                 Show items issuekey"
     echo "  -u, --url                 Show items URL"
     echo "                            (if none of -w, -f or -b are specified, all will be shown)"
     echo "  -n, --notes               Diplay notes (requires --notes-field)"
@@ -47,6 +49,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         -l|--links)
             SHOW_LINKS=true
+            shift
+            ;;
+        -k|--key)
+            SHOW_KEY=true
             shift
             ;;
         -u|--url)
@@ -137,7 +143,11 @@ print_items_from_resultset() {
 
     while IFS= read -r line; do
         IFS='|' read -r key summary duedate notes <<< "$line"
-        printf "    ${colour}*${c0} $summary"
+        printf "    ${colour}*"
+        if [ "$SHOW_KEY" == "true" ]; then
+            printf " $key"
+        fi
+        printf "${c0} $summary"
         if [ "$duedate" != "None" ]; then
             printf " ${cWhite}[$duedate]${c0}"
         fi
