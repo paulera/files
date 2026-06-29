@@ -8,13 +8,14 @@
 # * This is your test: `jql "Project = SPO and created > 2025-10-01 and created < 2026-01-01" -c` must be equal to 182
 # ---------------------------------------------
 """
-CLI tool to run JQL queries against Jira, with table or raw output.
+CLI tool to run JQL queries against Jira, with flexible output formats.
 
 Features:
   * Wrap/truncate columns
   * Auto-cached field → API name map
   * Manual field aliases
   * Column header renaming
+    * Output formats: table/raw/json/csv (+ tabulate formats)
   * Debug verbosity flags (--debug)
   * Query/row-count display flags
 
@@ -25,7 +26,7 @@ Config dir ~/.jql-config/:
 
 Usage:
     jql [-f fields] [-fa fields] [-fr fields] [-fl]
-            [-r] [-s SEP] [-n LIMIT] [-T TF]
+            [-t FORMAT] [-s SEP] [-n LIMIT]
             [-q] [-c] [-d DEBUG_FLAGS]
             [--jira-fields [all|jira|custom|update]] <JQL>
 
@@ -47,12 +48,13 @@ Debug flags (comma-separated):
 import os
 import sys
 import json
+import csv
 import argparse
 import requests
 import re
 import textwrap
 from requests.auth import HTTPBasicAuth
-from tabulate import tabulate
+from tabulate import tabulate, tabulate_formats
 from colorama import Fore, Back, Style, init as colorama_init  # added
 
 # Constants
@@ -439,6 +441,55 @@ def normalize_field_list(field_values, field_map, alias_map):
 
     return normalized
 
+
+def normalize_output_key(name):
+    """Normalize a column header to letters, numbers, and underscore only."""
+    normalized = re.sub(r'[^0-9A-Za-z_]+', '_', name.strip())
+    normalized = re.sub(r'_+', '_', normalized).strip('_')
+    if not normalized:
+        normalized = 'field'
+    if normalized[0].isdigit():
+        normalized = f"_{normalized}"
+    return normalized
+
+
+def build_json_keys(headers):
+    """Build unique normalized keys from output headers."""
+    counts = {}
+    keys = []
+    for header in headers:
+        base = normalize_output_key(header)
+        counts[base] = counts.get(base, 0) + 1
+        if counts[base] == 1:
+            keys.append(base)
+        else:
+            keys.append(f"{base}_{counts[base]}")
+    return keys
+
+
+def resolve_output_mode(format_value):
+    """Resolve the selected output format and validate table formats."""
+    selected = (format_value or '').strip().lower()
+    if not selected:
+        selected = 'table'
+
+    builtin = {'table', 'raw', 'json', 'csv'}
+    if selected in builtin:
+        if selected == 'table':
+            return 'table', 'simple_grid'
+        return selected, None
+
+    available_table_formats = sorted(tabulate_formats)
+    if selected in available_table_formats:
+        return 'table', selected
+
+    all_formats = ['table', 'raw', 'json', 'csv'] + available_table_formats
+    supported = ', '.join(all_formats)
+    sys.exit(
+        f"Error: output format '{format_value}' is not recognized. "
+        f"Supported formats: {supported}"
+    )
+
 # Main
 
 def main():
@@ -449,7 +500,7 @@ def main():
         - Handle maintenance commands (jira field listing/cache update)
         - Resolve final field set (`--fields`, `--fields-add`, `--fields-remove`)
         - Optionally print final field list (`--fields-list`)
-        - Query Jira and render either raw or table output
+        - Query Jira and render selected output format
     """
     api = os.getenv('JIRA_URL', '').rstrip('/')
     auth = HTTPBasicAuth(os.getenv('JIRA_USER', ''), os.getenv('JIRA_API_TOKEN', ''))
@@ -480,9 +531,10 @@ def main():
         help='List the final Jira fields that will be used and exit'
     )
     parser.add_argument(
-        '-r', '--raw',
-        action='store_true',
-        help='Raw output mode: values separated by SEP'
+        '-t', '--format',
+        default='table',
+        metavar='FORMAT',
+        help='Output format: table (default), raw, json, csv, or any tabulate format name'
     )
     parser.add_argument(
         '-s', '--sep',
@@ -493,11 +545,6 @@ def main():
         '-n', '--limit',
         type=int, default=1000,
         help='Max issues to fetch (default: 1000; -1 for all)'
-    )
-    parser.add_argument(
-        '-T', '--tablefmt',
-        default='simple_grid',
-        help='Table format for visual mode (default: "simple_grid")'
     )
     parser.add_argument(
         '-q', '--show-query',
@@ -671,9 +718,22 @@ def main():
         paired = sorted(zip(rows_raw, rows_vis), key=_sort_key)
         rows_raw, rows_vis = (list(x) for x in zip(*paired)) if paired else ([], [])
 
-    if args.raw:
+    output_mode, table_format = resolve_output_mode(args.format)
+    base_headers = [h for _, _, _, _, h in specs]
+
+    if output_mode == 'raw':
         for r in rows_raw:
             print(args.sep.join(r))
+    elif output_mode == 'json':
+        keys = build_json_keys(base_headers)
+        payload = []
+        for row in rows_raw:
+            payload.append({key: row[i] for i, key in enumerate(keys)})
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+    elif output_mode == 'csv':
+        writer = csv.writer(sys.stdout)
+        writer.writerow(base_headers)
+        writer.writerows(rows_raw)
     else:
         if args.show_query:
             if use_color:
@@ -690,7 +750,7 @@ def main():
         print(tabulate(
             rows_vis,
             headers=headers,
-            tablefmt=args.tablefmt
+            tablefmt=table_format
         ))
         if args.show_rows_count:
             if use_color:
