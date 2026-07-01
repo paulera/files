@@ -13,7 +13,7 @@ if [ "$1" == "--markdown" ] || [ "$1" == "-m" ] || [ "$1" == "--md" ]; then
         printf "\n"
     }'
 elif [ ! -z "$1" ]; then
-    $* --raw | jiralink
+    $* --format raw | jiralink
 else
     cat | \
     sed 's/\[/ /g' | \
