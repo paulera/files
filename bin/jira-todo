@@ -120,9 +120,9 @@ if [ ! -z "$NOTES_FIELD" ]; then
     NOTES_FIELD=",$NOTES_FIELD"
 fi
 
-[ "$SHOW_WIP" = "true" ] && wip=$(jql "Project=${PROJECT_KEY} AND status in ('In Progress')" --fields "key,summary,duedate,$NOTES_FIELD" --raw)
-[ "$SHOW_FOLLOW" = "true" ] && fup=$(jql "Project=${PROJECT_KEY} AND status in ('Follow up')" --fields "key,summary,duedate,$NOTES_FIELD" --raw)
-[ "$SHOW_BLOCKED" = "true" ] && blk=$(jql "Project=${PROJECT_KEY} AND status in ('Blocked')" --fields "key,summary,duedate,$NOTES_FIELD" --raw)
+[ "$SHOW_WIP" = "true" ] && wip=$(jql "Project=${PROJECT_KEY} AND status in ('In Progress')" --fields "key,summary,duedate,$NOTES_FIELD" --format raw)
+[ "$SHOW_FOLLOW" = "true" ] && fup=$(jql "Project=${PROJECT_KEY} AND status in ('Follow up')" --fields "key,summary,duedate,$NOTES_FIELD" --format raw)
+[ "$SHOW_BLOCKED" = "true" ] && blk=$(jql "Project=${PROJECT_KEY} AND status in ('Blocked')" --fields "key,summary,duedate,$NOTES_FIELD" --format raw)
 
 get_linked_urls() {
     KEY=$1
