@@ -1,6 +1,8 @@
 #!/bin/bash
 
 PROJECT_KEY=""
+SHOW_TODO_TOP="false"
+TODO_TOP_N=5
 SHOW_WIP="false"
 SHOW_FOLLOW="false"
 SHOW_BLOCKED="false"
@@ -10,11 +12,17 @@ SHOW_URL="false"
 SHOW_NOTE="false"
 NOTES_FIELD=""
 
+TODO_COLUMN="To Do"
+WIP_COLUMN="In Progress"
+FOLLOWUP_COLUMN="Follow up"
+BLOCKED_COLUMN="Blocked"
+
 show_help() {
     echo "Usage: $(basename "$0") [options]"
     echo ""
     echo "Options:"
     echo "  -p, --project             Project key to filter issues"
+    echo "  -t, --todo [N]            Show the top N items of To Do (default to ${TODO_TOP_N})"
     echo "  -w, --wip                 Show items In Progress"
     echo "  -f, --follow              Show items in Follow Up"
     echo "  -b, --blocked             Show items that are Blocked"
@@ -34,6 +42,16 @@ while [[ $# -gt 0 ]]; do
         -p|--project)
             PROJECT_KEY="$2"
             shift 2
+            ;;
+        -t|--todo)
+            SHOW_TODO_TOP="true"
+            # if after -t there is a number, use it as the number of items to show, otherwise use default
+            if [[ "$2" =~ ^[0-9]+$ ]]; then 
+                TODO_TOP_N="$2"
+                shift 2
+            else
+                shift
+            fi
             ;;
         -w|--wip)
             SHOW_WIP=true
@@ -86,7 +104,8 @@ if [ -z "$PROJECT_KEY" ]; then
     exit 1
 fi
 
-if [ "$SHOW_WIP" == "false" ] && [ "$SHOW_FOLLOW" == "false" ] && [ "$SHOW_BLOCKED" == "false" ]; then
+if [ "$SHOW_TODO_TOP" == "false" ] && [ "$SHOW_WIP" == "false" ] && [ "$SHOW_FOLLOW" == "false" ] && [ "$SHOW_BLOCKED" == "false" ]; then
+    SHOW_TODO_TOP=true
     SHOW_WIP=true
     SHOW_FOLLOW=true
     SHOW_BLOCKED=true
@@ -120,9 +139,10 @@ if [ ! -z "$NOTES_FIELD" ]; then
     NOTES_FIELD=",$NOTES_FIELD"
 fi
 
-[ "$SHOW_WIP" = "true" ] && wip=$(jql "Project=${PROJECT_KEY} AND status in ('In Progress')" --fields "key,summary,duedate,$NOTES_FIELD" --format raw)
-[ "$SHOW_FOLLOW" = "true" ] && fup=$(jql "Project=${PROJECT_KEY} AND status in ('Follow up')" --fields "key,summary,duedate,$NOTES_FIELD" --format raw)
-[ "$SHOW_BLOCKED" = "true" ] && blk=$(jql "Project=${PROJECT_KEY} AND status in ('Blocked')" --fields "key,summary,duedate,$NOTES_FIELD" --format raw)
+[ "$SHOW_TODO_TOP" = "true" ] && todo=$(jql "Project=${PROJECT_KEY} AND status in ('${TODO_COLUMN}')" --fields "key,summary,duedate${NOTES_FIELD}" --format raw -n ${TODO_TOP_N})
+[ "$SHOW_WIP" = "true" ] && wip=$(jql "Project=${PROJECT_KEY} AND status in ('${WIP_COLUMN}')" --fields "key,summary,duedate${NOTES_FIELD}" --format raw)
+[ "$SHOW_FOLLOW" = "true" ] && fup=$(jql "Project=${PROJECT_KEY} AND status in ('${FOLLOWUP_COLUMN}')" --fields "key,summary,duedate${NOTES_FIELD}" --format raw)
+[ "$SHOW_BLOCKED" = "true" ] && blk=$(jql "Project=${PROJECT_KEY} AND status in ('${BLOCKED_COLUMN}')" --fields "key,summary,duedate${NOTES_FIELD}" --format raw)
 
 get_linked_urls() {
     KEY=$1
@@ -173,6 +193,12 @@ print_items_from_resultset() {
 
     done <<< "$resultset"
 }
+
+if [ ! -z "$todo" ]; then
+    printf "🗂️ ${cWhite}To Do: ${cDGray}top ${TODO_TOP_N}${c0}\n"
+    print_items_from_resultset "$todo" "$cWhite"
+    printf "\n"
+fi
 
 if [ ! -z "$wip" ]; then
     printf "▶️ ${cCyan}In Progress:${c0}\n"
