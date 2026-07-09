@@ -1,0 +1,3 @@
+#!/bin/bash
+
+pbpaste | tr '[:lower:]' '[:upper:]' | pbcopy
