@@ -164,9 +164,17 @@ get_linked_tasks() {
         | jq -r --arg jira_url "$JIRA_URL" '
             .fields.issuelinks[]? |
             if has("outwardIssue") then
-                .type.outward + " " + $jira_url + "/browse/" + .outwardIssue.key
+                [
+                    .type.outward,
+                    (.outwardIssue.fields.summary // .outwardIssue.key),
+                    (.outwardIssue.key)
+                ] | @tsv
             elif has("inwardIssue") then
-                .type.inward + " " + $jira_url + "/browse/" + .inwardIssue.key
+                [
+                    .type.inward,
+                    (.inwardIssue.fields.summary // .inwardIssue.key),
+                    (.inwardIssue.key)
+                ] | @tsv
             else
                 empty
             end
@@ -182,6 +190,7 @@ print_items_from_resultset() {
     fi
 
     while IFS= read -r line; do
+        printf "\n"
         IFS='|' read -r key summary duedate notes <<< "$line"
         printf "    ${colour}*"
         if [ "$SHOW_KEY" == "true" ]; then
@@ -193,7 +202,7 @@ print_items_from_resultset() {
         fi
 
         if [ "$SHOW_URL" = "true" ]; then
-            printf ' - '"${JIRA_URL}/browse/${key}"
+            printf "\n      [${JIRA_URL}/browse/${key}]"
         fi
 
         printf '\n'
@@ -212,8 +221,14 @@ print_items_from_resultset() {
 
             linked_tasks=$(get_linked_tasks "$key")
             if [ ! -z "$linked_tasks" ]; then
-                while IFS= read -r task_link; do
-                    printf "      -> $task_link\n"
+                while IFS=$'\t' read -r link_type link_summary link_key; do
+                    link_colour="${cWhite}"
+                    if [ "$link_type" = "is blocked by" ] || [ "$link_type" = "blocks" ]; then
+                        link_colour="${cRed}"
+                    fi
+
+                    printf "      -> ${link_colour}${link_type} \"${link_summary}\"${c0}\n"
+                    printf "         [${JIRA_URL}/browse/${link_key}]\n"
                 done <<< "$linked_tasks"
             fi
         fi
