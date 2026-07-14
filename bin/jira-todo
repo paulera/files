@@ -139,10 +139,10 @@ if [ ! -z "$NOTES_FIELD" ]; then
     NOTES_FIELD=",$NOTES_FIELD"
 fi
 
-[ "$SHOW_TODO_TOP" = "true" ] && todo=$(jql "Project=${PROJECT_KEY} AND status in ('${TODO_COLUMN}')" --fields "key,summary,duedate${NOTES_FIELD}" --format raw -n ${TODO_TOP_N})
-[ "$SHOW_WIP" = "true" ] && wip=$(jql "Project=${PROJECT_KEY} AND status in ('${WIP_COLUMN}')" --fields "key,summary,duedate${NOTES_FIELD}" --format raw)
-[ "$SHOW_FOLLOW" = "true" ] && fup=$(jql "Project=${PROJECT_KEY} AND status in ('${FOLLOWUP_COLUMN}')" --fields "key,summary,duedate${NOTES_FIELD}" --format raw)
-[ "$SHOW_BLOCKED" = "true" ] && blk=$(jql "Project=${PROJECT_KEY} AND status in ('${BLOCKED_COLUMN}')" --fields "key,summary,duedate${NOTES_FIELD}" --format raw)
+[ "$SHOW_TODO_TOP" = "true" ] && todo=$(jql "Project=${PROJECT_KEY} AND status in ('${TODO_COLUMN}') ORDER BY Rank" --fields "key,summary,duedate${NOTES_FIELD}" --format raw -n ${TODO_TOP_N})
+[ "$SHOW_WIP" = "true" ] && wip=$(jql "Project=${PROJECT_KEY} AND status in ('${WIP_COLUMN}') ORDER BY Rank" --fields "key,summary,duedate${NOTES_FIELD}" --format raw)
+[ "$SHOW_FOLLOW" = "true" ] && fup=$(jql "Project=${PROJECT_KEY} AND status in ('${FOLLOWUP_COLUMN}') ORDER BY Rank" --fields "key,summary,duedate${NOTES_FIELD}" --format raw)
+[ "$SHOW_BLOCKED" = "true" ] && blk=$(jql "Project=${PROJECT_KEY} AND status in ('${BLOCKED_COLUMN}') ORDER BY Rank" --fields "key,summary,duedate${NOTES_FIELD}" --format raw)
 
 get_linked_urls() {
     KEY=$1
@@ -195,14 +195,14 @@ print_items_from_resultset() {
 }
 
 if [ ! -z "$todo" ]; then
-    printf "🗂️ ${cWhite}To Do: ${cDGray}top ${TODO_TOP_N}${c0}\n"
-    print_items_from_resultset "$todo" "$cWhite"
+    printf "🗂️ ${cCyan}To Do: ${cDGray}top ${TODO_TOP_N}${c0}\n"
+    print_items_from_resultset "$todo" "$cCyan"
     printf "\n"
 fi
 
 if [ ! -z "$wip" ]; then
-    printf "▶️ ${cCyan}In Progress:${c0}\n"
-    print_items_from_resultset "$wip" "$cCyan"
+    printf "▶️ ${cGreen}In Progress:${c0}\n"
+    print_items_from_resultset "$wip" "$cGreen"
     printf "\n"
 fi
 
