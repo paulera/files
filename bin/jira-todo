@@ -196,7 +196,8 @@ print_items_from_resultset() {
         if [ "$SHOW_KEY" == "true" ]; then
             printf " $key"
         fi
-        printf "${c0} $summary"
+        printf "${c0}"
+        printf "${cWhite} $summary${c0}"
         if [ "$duedate" != "None" ]; then
             printf " ${cWhite}[$duedate]${c0}"
         fi
@@ -208,14 +209,14 @@ print_items_from_resultset() {
         printf '\n'
         
         if [ "$notes" != "None" ]; then
-            printf "      :: ${cWhite}$notes${c0}\n"        
+            printf "      ::: ${cWhite}$notes${c0}\n"
         fi
 
         if [ "$SHOW_LINKS" = "true" ]; then 
             linked_urls=$(get_linked_urls "$key")
             if [ ! -z "$linked_urls" ]; then
                 while IFS= read -r url; do
-                    printf "      >> $url\n"
+                    printf "      >>> $url\n"
                 done <<< "$linked_urls"
             fi
 
@@ -227,7 +228,7 @@ print_items_from_resultset() {
                         link_colour="${cRed}"
                     fi
 
-                    printf "      -> ${link_colour}${link_type} \"${link_summary}\"${c0}\n"
+                    printf "      --> ${link_colour}${link_type} \"${link_summary}\"${c0}\n"
                     printf "         [${JIRA_URL}/browse/${link_key}]\n"
                 done <<< "$linked_tasks"
             fi
