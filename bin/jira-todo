@@ -1,5 +1,7 @@
 #!/bin/bash
 
+#JIRA API OpenAPI specification:  https://dac-static.atlassian.com/cloud/jira/platform/swagger-v3.v3.json
+
 PROJECT_KEY=""
 SHOW_TODO_TOP="false"
 TODO_TOP_N=5
@@ -153,6 +155,24 @@ get_linked_urls() {
         | jq -r '.[].object.url'
 }
 
+get_linked_tasks() {
+    KEY=$1
+    curl -sS \
+        -u "$JIRA_USER:$JIRA_API_TOKEN" \
+        -H "Accept: application/json" \
+        "${JIRA_URL}/rest/api/3/issue/${KEY}?fields=issuelinks" \
+        | jq -r --arg jira_url "$JIRA_URL" '
+            .fields.issuelinks[]? |
+            if has("outwardIssue") then
+                .type.outward + " " + $jira_url + "/browse/" + .outwardIssue.key
+            elif has("inwardIssue") then
+                .type.inward + " " + $jira_url + "/browse/" + .inwardIssue.key
+            else
+                empty
+            end
+        '
+}
+
 print_items_from_resultset() {
     resultset="$1"
     if [ ! -z "$2" ]; then
@@ -188,6 +208,13 @@ print_items_from_resultset() {
                 while IFS= read -r url; do
                     printf "      >> $url\n"
                 done <<< "$linked_urls"
+            fi
+
+            linked_tasks=$(get_linked_tasks "$key")
+            if [ ! -z "$linked_tasks" ]; then
+                while IFS= read -r task_link; do
+                    printf "      -> $task_link\n"
+                done <<< "$linked_tasks"
             fi
         fi
 
