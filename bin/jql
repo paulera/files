@@ -15,7 +15,7 @@ Features:
   * Dot-notation paths into JSON fields (parent.fields.summary)
   * Auto-cached field → API name map
   * Manual field aliases
-  * Column header renaming
+  * Column header renaming (inline field=Header, or columns-rename.json)
     * Output formats: table/raw/json/csv (+ tabulate formats)
   * Debug verbosity flags (--debug)
   * Query/row-count display flags
@@ -411,16 +411,29 @@ def load_maps():
 
 
 def parse_field_token(token):
-    """Parse one field token into alias and display formatting hints.
+    """Parse one field token into alias, formatting hints, and header override.
 
     Supported token forms:
         - `field` for no formatting hint
         - `field(30)` to wrap output to width 30
         - `field{30}` to truncate output to width 30
+        - `field=Header` to rename the column header
 
-    Returns `(alias, wrap, trunc)`, where `wrap` and `trunc` are optional.
+    Width hints belong to the field definition, so they go on the left of the
+    `=`: `summary(30)=Title`. The token is split on its first `=` only, which
+    leaves headers free to contain `=` themselves.
+
+    Returns `(alias, wrap, trunc, header)`, where all but `alias` are optional.
     """
-    alias = token.strip()
+    token = token.strip()
+    header = None
+
+    if '=' in token:
+        field_part, header_part = token.split('=', 1)
+        token = field_part.strip()
+        header = header_part.strip()
+
+    alias = token
     wrap = None
     trunc = None
     m1 = re.match(r'^(.+?)\((\d+)\)$', alias)
@@ -429,7 +442,8 @@ def parse_field_token(token):
         alias, wrap = m1.group(1), int(m1.group(2))
     elif m2:
         alias, trunc = m2.group(1), int(m2.group(2))
-    return alias, wrap, trunc
+
+    return alias, wrap, trunc, (header or None)
 
 
 def lookup_field_id(name, field_map, alias_map):
@@ -487,16 +501,19 @@ def build_field_specs(field_string, field_map, alias_map, col_rename, id_map):
         if not token:
             continue
 
-        alias, wrap, trunc = parse_field_token(token)
+        alias, wrap, trunc, header_override = parse_field_token(token)
         real, path = resolve_field_id(alias, field_map, alias_map)
 
-        spec_id = (real, path, wrap, trunc)
+        spec_id = (real, path, wrap, trunc, header_override)
         if spec_id in seen:
             continue
         seen.add(spec_id)
 
-        default_header = alias if path else id_map.get(real, real)
-        header = col_rename.get(default_header, default_header)
+        if header_override:
+            header = header_override
+        else:
+            default_header = alias if path else id_map.get(real, real)
+            header = col_rename.get(default_header, default_header)
 
         specs.append((alias, real, path, wrap, trunc, header))
 
@@ -519,7 +536,7 @@ def normalize_field_list(field_values, field_map, alias_map):
             if not token:
                 continue
 
-            alias, _, _ = parse_field_token(token)
+            alias, _, _, _ = parse_field_token(token)
             target = resolve_field_id(alias, field_map, alias_map)
 
             if target in seen:
@@ -599,7 +616,8 @@ def main():
     parser.add_argument(
         '-f', '--fields',
         default='key,issuetype(15),priority,status(15),summary(30),assignee(15)',
-        help='Fields list; supports dot paths into JSON fields, e.g. parent.fields.summary(30) '
+        help='Fields list; supports dot paths into JSON fields and inline headers, '
+             'e.g. parent.fields.summary(30)=Epic, cf[10813]=Tr Date '
              '(default: key,issuetype(15),priority,status(15),summary(30),assignee(15))'
     )
     parser.add_argument(
@@ -699,9 +717,9 @@ def main():
 
     if args.fields_add:
         extra_specs = build_field_specs(','.join(args.fields_add), field_map, alias_map, col_rename, id_map)
-        seen_fields = set((real, path, wrap, trunc) for _, real, path, wrap, trunc, _ in specs)
+        seen_fields = set((real, path, wrap, trunc, header) for _, real, path, wrap, trunc, header in specs)
         for spec in extra_specs:
-            spec_id = (spec[1], spec[2], spec[3], spec[4])
+            spec_id = (spec[1], spec[2], spec[3], spec[4], spec[5])
             if spec_id in seen_fields:
                 continue
             specs.append(spec)
@@ -761,6 +779,9 @@ def main():
                             else:
                                 vals.append(str(it))
                         val = ','.join(vals)
+                    elif x is None:
+                        # Jira sends unset fields as null; show them as blank.
+                        val = ''
                     else:
                         val = str(x)
             val = val.strip()
