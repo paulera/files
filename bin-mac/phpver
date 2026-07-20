@@ -1,9 +1,20 @@
 #!/bin/bash
 
-if [ "${OS}" = "mac" ]; then
-    $FILESROOT/bin-mac/phpver $*
-    exit $?
+if [ "$1" = "--list" ]; then
+    brew list --formula | grep -E '^php(@[0-9.]+)?$'
+    exit 0
 fi
 
-echo -e "${cRed}error:${c0} PHPVER is not ported for the operating sysmtem ${cCyan}${OS}${c0}".
-echo "Go ahead, implement it."
+if [ -z "$1" ]; then
+    php -v | head -n 1
+    exit 0
+fi
+
+target="$1"
+# unlink whatever php formula is currently linked
+for v in $(brew list --formula | grep -E '^php(@[0-9.]+)?$'); do
+    brew unlink "$v" &>/dev/null
+done
+
+brew link --overwrite --force "$target"
+php -v | head -n 1
