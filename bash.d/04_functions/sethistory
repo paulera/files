@@ -1,0 +1,35 @@
+#!/bin/bash
+
+
+function sethistory() {
+
+    if [ "$1" == "--help" ]; then
+        echo "Controls if commands history should be saved"
+        echo "Usage: sethistory [--help] [on|1|off|0]"
+        echo "   --help: shows this message"
+        echo "   on, 1:  enable history"
+        echo "   off,0:  disables history"
+        echo "   without params, shows the current state of shopt -o history"
+        echo
+        return
+    elif [ "$1" == "on" ] || [ "$1" == "1" ]; then
+        shopt -os history
+        sethistory
+    elif [ "$1" == "off" ] || [ "$1" == "0" ]; then
+        shopt -ou history
+        sethistory
+    else
+        STATE=$(shopt -o history | cut -f 2)
+        printf "Shell history is " 
+        if [ "$STATE" == "on" ]; then
+            printf "${cGreen}ON${c0}"
+        elif [ "$STATE" == "off" ]; then
+            printf "${cRed}OFF${c0}"
+        else
+            printf "${cYellow}${STATE}${c0} (unknown)"
+        fi
+        printf "\n"
+    fi
+}
+export -f sethistory
+
