@@ -3,4 +3,4 @@ soft/
 .idea/
 .gitconfig
 .DS_Store
-
+__pycache__/
