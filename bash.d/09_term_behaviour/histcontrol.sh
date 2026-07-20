@@ -1,0 +1,1 @@
+export HISTCONTROL=$HISTCONTROL:ignorespace
