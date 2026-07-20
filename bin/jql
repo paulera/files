@@ -12,6 +12,7 @@ CLI tool to run JQL queries against Jira, with flexible output formats.
 
 Features:
   * Wrap/truncate columns
+  * Dot-notation paths into JSON fields (parent.fields.summary)
   * Auto-cached field → API name map
   * Manual field aliases
   * Column header renaming
@@ -63,6 +64,9 @@ CACHE_FILE = os.path.join(CONFIG_DIR, "fields-map-cache.json")
 ALIASES_FILE = os.path.join(CONFIG_DIR, "fields-aliases.json")
 RENAME_FILE = os.path.join(CONFIG_DIR, "columns-rename.json")
 CF_RE = re.compile(r'^cf\[(\d+)\]$')
+MISSING = object()
+COLOR_FIELDS = ('status', 'priority', 'issue type')
+COLOR_FIELD_ALIASES = {'issuetype': 'issue type'}
 
 # --- Color support ----------------------------------------------------------
 
@@ -227,6 +231,67 @@ def extract_text(node):
     return ''
 
 
+def extract_path(value, path):
+    """Walk a dot-notation path into a decoded Jira field value.
+
+    Dict segments select a key. Numeric segments index into a list; any other
+    segment applied to a list is mapped over every element. Returns the
+    `MISSING` sentinel when the path does not exist, so callers can tell an
+    absent path apart from a legitimately empty value.
+    """
+    for i, seg in enumerate(path):
+        if isinstance(value, dict):
+            if seg not in value:
+                return MISSING
+            value = value[seg]
+        elif isinstance(value, list):
+            if seg.isdigit():
+                idx = int(seg)
+                if idx >= len(value):
+                    return MISSING
+                value = value[idx]
+            else:
+                mapped = [extract_path(item, path[i:]) for item in value]
+                return [m for m in mapped if m is not MISSING]
+        else:
+            return MISSING
+    return value
+
+
+def render_path_value(value):
+    """Render the result of `extract_path` as a display string.
+
+    A path that still lands on an object or a mixed list is shown as JSON, so
+    the remaining structure stays visible. Lists of plain scalars are joined
+    with commas to match how multi-value fields are rendered elsewhere.
+    """
+    if value is MISSING or value is None:
+        return ''
+    if isinstance(value, dict):
+        return json.dumps(value, ensure_ascii=False)
+    if isinstance(value, list):
+        if all(not isinstance(item, (dict, list)) for item in value):
+            return ','.join('' if item is None else str(item) for item in value)
+        return json.dumps(value, ensure_ascii=False)
+    return str(value)
+
+
+def color_key(real, path, id_map):
+    """Pick the field name used to look up semantic colors for a column.
+
+    Plain fields use their Jira display name. Path fields search the path
+    right-to-left for a segment that has coloring rules, so that for example
+    `parent.fields.status.name` is colored like a status column.
+    """
+    if path:
+        for seg in reversed(path):
+            seg = seg.lower()
+            seg = COLOR_FIELD_ALIASES.get(seg, seg)
+            if seg in COLOR_FIELDS:
+                return seg
+    return id_map.get(real, real).lower()
+
+
 def fetch_id_map(api, auth):
     """Build a map of Jira field IDs to human-readable names.
 
@@ -367,30 +432,52 @@ def parse_field_token(token):
     return alias, wrap, trunc
 
 
-def resolve_field_id(alias, field_map, alias_map):
-    """Resolve a user-entered field token to the Jira API field id.
+def lookup_field_id(name, field_map, alias_map):
+    """Resolve one exact field name to a Jira API field id, or None.
 
     Resolution priority:
         1. User alias mapping (`fields-aliases.json`)
         2. `cf[12345]` shorthand
         3. Cached field name/clause mapping
-        4. Raw token as fallback
     """
-    if alias in alias_map:
-        return alias_map[alias]
+    if name in alias_map:
+        return alias_map[name]
 
-    mcf = CF_RE.match(alias)
+    mcf = CF_RE.match(name)
     if mcf:
         return f"customfield_{mcf.group(1)}"
 
-    return field_map.get(alias, alias)
+    return field_map.get(name)
+
+
+def resolve_field_id(alias, field_map, alias_map):
+    """Resolve a user-entered field token into a field id and a JSON path.
+
+    The whole token is tried first, so field names containing dots keep
+    working. Otherwise the longest prefix that resolves becomes the field and
+    the remaining segments become the path used to drill into its JSON value.
+
+    Returns `(real_field_id, path)`, where `path` is a tuple of segments.
+    """
+    direct = lookup_field_id(alias, field_map, alias_map)
+    if direct:
+        return direct, ()
+
+    parts = alias.split('.')
+    for i in range(len(parts) - 1, 0, -1):
+        real = lookup_field_id('.'.join(parts[:i]), field_map, alias_map)
+        if real:
+            return real, tuple(parts[i:])
+
+    return parts[0], tuple(parts[1:])
 
 
 def build_field_specs(field_string, field_map, alias_map, col_rename, id_map):
     """Build the canonical field specification list for query and rendering.
 
-    Each returned item is `(alias, real_field_id, wrap, trunc, header)`.
-    Duplicate resolved field IDs are dropped while preserving first-seen order.
+    Each returned item is `(alias, real_field_id, path, wrap, trunc, header)`.
+    Only fully identical specs are dropped: `key` and `parent.key` resolve to
+    different columns even though both read a key. First-seen order is kept.
     """
     specs = []
     seen = set()
@@ -401,26 +488,27 @@ def build_field_specs(field_string, field_map, alias_map, col_rename, id_map):
             continue
 
         alias, wrap, trunc = parse_field_token(token)
-        real = resolve_field_id(alias, field_map, alias_map)
+        real, path = resolve_field_id(alias, field_map, alias_map)
 
-        if real in seen:
+        spec_id = (real, path, wrap, trunc)
+        if spec_id in seen:
             continue
-        seen.add(real)
+        seen.add(spec_id)
 
-        default_header = id_map.get(real, real)
+        default_header = alias if path else id_map.get(real, real)
         header = col_rename.get(default_header, default_header)
 
-        specs.append((alias, real, wrap, trunc, header))
+        specs.append((alias, real, path, wrap, trunc, header))
 
     return specs
 
 
 def normalize_field_list(field_values, field_map, alias_map):
-    """Normalize one or more field lists into resolved Jira field IDs.
+    """Normalize one or more field lists into `(field_id, path)` pairs.
 
     This is used by `--fields-remove` so removals match the same resolution
-    logic as the main field selection path. Returns unique field IDs while
-    preserving insertion order.
+    logic as the main field selection path. Removing `parent` drops only the
+    plain column, while `parent.key` drops only that path column.
     """
     normalized = []
     seen = set()
@@ -432,12 +520,12 @@ def normalize_field_list(field_values, field_map, alias_map):
                 continue
 
             alias, _, _ = parse_field_token(token)
-            real = resolve_field_id(alias, field_map, alias_map)
+            target = resolve_field_id(alias, field_map, alias_map)
 
-            if real in seen:
+            if target in seen:
                 continue
-            seen.add(real)
-            normalized.append(real)
+            seen.add(target)
+            normalized.append(target)
 
     return normalized
 
@@ -511,7 +599,8 @@ def main():
     parser.add_argument(
         '-f', '--fields',
         default='key,issuetype(15),priority,status(15),summary(30),assignee(15)',
-        help='Fields list (default: key,issuetype(15),priority,status(15),summary(30),assignee(15))'
+        help='Fields list; supports dot paths into JSON fields, e.g. parent.fields.summary(30) '
+             '(default: key,issuetype(15),priority,status(15),summary(30),assignee(15))'
     )
     parser.add_argument(
         '-fa', '--fields-add',
@@ -610,23 +699,26 @@ def main():
 
     if args.fields_add:
         extra_specs = build_field_specs(','.join(args.fields_add), field_map, alias_map, col_rename, id_map)
-        seen_fields = set(real for _, real, _, _, _ in specs)
+        seen_fields = set((real, path, wrap, trunc) for _, real, path, wrap, trunc, _ in specs)
         for spec in extra_specs:
-            if spec[1] in seen_fields:
+            spec_id = (spec[1], spec[2], spec[3], spec[4])
+            if spec_id in seen_fields:
                 continue
             specs.append(spec)
-            seen_fields.add(spec[1])
+            seen_fields.add(spec_id)
 
     if args.fields_remove:
         remove_fields = set(normalize_field_list(args.fields_remove, field_map, alias_map))
-        specs = [spec for spec in specs if spec[1] not in remove_fields]
+        specs = [spec for spec in specs if (spec[1], spec[2]) not in remove_fields]
 
     if args.fields_list:
-        print(','.join(real for _, real, _, _, _ in specs))
+        print(','.join('.'.join((real,) + path) for _, real, path, _, _, _ in specs))
         return
 
+    # Only the root field is requested from Jira; paths are applied locally.
+    query_fields = list(dict.fromkeys(real for _, real, _, _, _, _ in specs))
     url = f"{api}/rest/api/3/search/jql"
-    params = {'jql': ' '.join(args.jql), 'fields': ','.join(r for _,r,_,_,_ in specs)}
+    params = {'jql': ' '.join(args.jql), 'fields': ','.join(query_fields)}
     issues = fetch_issues(url, auth, params, args.limit)
 
     rows_raw = []
@@ -639,12 +731,14 @@ def main():
         row_r = []
         row_v = []
         data = issue.get('fields', {})
-        for _, real, wrap, trunc, _ in specs:
-            if real in ['key','issuekey']:
+        for _, real, path, wrap, trunc, _ in specs:
+            if real in ['key','issuekey'] and not path:
                 val = issue.get('key', '')
             else:
                 x = data.get(real, '')
-                if 'json-objects' in debug_flags:
+                if path:
+                    val = render_path_value(extract_path(x, path))
+                elif 'json-objects' in debug_flags:
                     val = json.dumps(x)
                 else:
                     if isinstance(x, dict):
@@ -680,7 +774,7 @@ def main():
             
             # Colorize if enabled
             if use_color:
-                vis_val = colorize(id_map.get(real, real).lower(), vis_val)
+                vis_val = colorize(color_key(real, path, id_map), vis_val)
             
             row_v.append(vis_val)
         rows_raw.append(row_r)
@@ -695,7 +789,7 @@ def main():
             desc = token.startswith('-')
             fname = token.lstrip('-').strip().lower()
             col_idx = None
-            for i, (alias, real, wrap, trunc, header) in enumerate(specs):
+            for i, (alias, real, path, wrap, trunc, header) in enumerate(specs):
                 if alias.lower() == fname or header.lower() == fname:
                     col_idx = i
                     break
@@ -719,7 +813,7 @@ def main():
         rows_raw, rows_vis = (list(x) for x in zip(*paired)) if paired else ([], [])
 
     output_mode, table_format = resolve_output_mode(args.format)
-    base_headers = [h for _, _, _, _, h in specs]
+    base_headers = [h for _, _, _, _, _, h in specs]
 
     if output_mode == 'raw':
         for r in rows_raw:
@@ -741,9 +835,9 @@ def main():
             else:
                 print(f"\n{' '.join(args.jql)}\n")
         if use_color:
-            headers = [f"{Style.BRIGHT}{Fore.WHITE}{h}{Style.RESET_ALL}" for _,_,_,_,h in specs]
+            headers = [f"{Style.BRIGHT}{Fore.WHITE}{h}{Style.RESET_ALL}" for _,_,_,_,_,h in specs]
         else:
-            headers = [h for _,_,_,_,h in specs]
+            headers = [h for _,_,_,_,_,h in specs]
         if args.numbers:
             rows_vis = [[str(i+1)] + r for i, r in enumerate(rows_vis)]
             headers = ['#'] + headers
