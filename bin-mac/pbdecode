@@ -1,0 +1,9 @@
+#!/bin/bash
+
+if ! command -v urldecode > /dev/null 2>&1; then
+    echo "this command requires urldecode"
+    echo "https://github.com/paulera/files/blob/master/bin/urldecode"
+    exit
+fi
+
+pbpaste | urldecode | pbcopy

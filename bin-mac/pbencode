@@ -1,0 +1,9 @@
+#!/bin/bash
+
+if ! command -v urlencode > /dev/null 2>&1; then
+    echo "this command requires urlencode"
+    echo "https://github.com/paulera/files/blob/master/bin/urlencode"
+    exit
+fi
+
+pbpaste | urlencode | pbcopy
