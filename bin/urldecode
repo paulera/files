@@ -1,4 +1,10 @@
 #!/bin/bash
 # http://stackoverflow.com/questions/296536/how-to-urlencode-data-for-curl-command
-printf -v REPLY '%b' "${1//%/\\x}" # You can either set a return variable (FASTER)
-echo "${REPLY}"  #+or echo the result (EASIER)... or both... :p
+
+INPUT="$1"
+if [ -z "${INPUT}" ]; then
+    INPUT="$(cat)"
+fi
+
+printf -v REPLY '%b' "${INPUT//%/\\x}" # You can either set a return variable (FASTER)
+printf "${REPLY}"  #+or echo the result (EASIER)... or both... :p
