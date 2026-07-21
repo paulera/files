@@ -2,6 +2,8 @@
 
 // PSYSH Configuration file: ~/.config/psysh/config.php
 
+echo "\033[1;36mCustom config loaded from ".__FILE__."\033[0m\n\n";
+
 $defaultIncludes = [];
 $bootstrapPath = __DIR__ . '/include/bootstrap.php';
 if (file_exists($bootstrapPath)) {
@@ -28,13 +30,13 @@ return [
     // While PsySH ships with a bunch of great commands, it's possible to add
     // your own for even more awesome. Any Psy command added here will be
     // available in your Psy shell sessions.
-    //'commands' => [
+    'commands' => [
         // The `parse` command is a command used in the development of PsySH.
         // Given a string of PHP code, it pretty-prints the PHP Parser parse
         // tree. It prolly won't be super useful for most of you, but it's there
         // if you want to play :)
-        //new \Psy\Command\ParseCommand,
-    //],
+        new \Psy\Command\ParseCommand,
+    ],
 
     // "Default includes" will be included once at the beginning of every PsySH
     // session. This is a good place to add autoloaders for your favorite
@@ -104,7 +106,7 @@ return [
 
     // Sets the maximum number of entries the history can contain. If set to
     // zero, the history size is unlimited.
-    //'historySize' => 0,
+    'historySize' => 5000,
 
     // PsySH defaults to interactive mode in a terminal, and non-interactive
     // mode when input is coming from a pipe.  To override, use:
@@ -127,7 +129,7 @@ return [
 
     // Specify a custom prompt.
     //'prompt' => "\e[1;37m>>>\e[0m ",
-    'prompt' => ">>> ",
+    'prompt' => "> ",
 
     // Print var_export-style return values.
     //
