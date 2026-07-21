@@ -1,0 +1,20 @@
+#!/bin/bash
+
+VERBOSE=0
+
+if [ "$1" == "-v" ]; then
+    VERBOSE=1
+fi
+
+COMMIT_LOCAL=$(git -C $FILESROOT rev-parse HEAD)
+if [ "$VERBOSE" == "1" ]; then
+    echo "LOCAL:  ${COMMIT_LOCAL}"
+fi
+
+COMMIT_ORIGIN=$(git -C $FILESROOT ls-remote https://github.com/paulera/files.git origin -h refs/heads/master | cut -f 1)
+if [ "$VERBOSE" == "1" ]; then
+    echo "ORIGIN: ${COMMIT_ORIGIN}"
+fi
+
+HAS_UPDATES=0 && [ "$COMMIT_LOCAL" != "$COMMIT_ORIGIN" ] && HAS_UPDATES=1
+echo $HAS_UPDATES
