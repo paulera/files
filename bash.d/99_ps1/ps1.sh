@@ -43,13 +43,13 @@ PS1="${EMOJI:+$EMOJI }\
 \[${cBlue}\]\\w\[${c0}\] \
 \\$ "
         elif [ "$1" == "wrap" ]; then
-PS1="${EMOJI:+$EMOJI }\
+PS1="\n${EMOJI:+$EMOJI }\
 \[${cPurple}\]\$([ \"\$(type -t ps1_tor)\" == \"function\" ] &&  ps1_tor)\[${c0}\]\
 \[${cGreen}\]\\u\[${c0}\] \
 \[${cCyan}\]@$([ -z "$SSH_CONNECTION" ] && echo \\h || echo $SSH_CONNECTION | awk '{ print $3 }')\[${c0}\] \
 \[${cWhite}\]\$([ \"\$(type -t __git_ps1_abbreviated)\" == \"function\" ] &&  __git_ps1_abbreviated)\[${c0}\]\
-\n\
-\[${cWhite}\]┗\[${c0}\] \[${cBlue}\]\\w\[${c0}\] \
+\[${cBlue}\]\\w\[${c0}\]
+\[${cWhite}\]┗‣\[${c0}\] \
 \\$ "
         else
 PS1="${EMOJI:+$EMOJI }\
