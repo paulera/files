@@ -1,0 +1,308 @@
+#!/bin/bash
+
+RECURSIVE=false
+SHOW_MODIFIED=false
+SHOW_NEW=false
+COMPARE_MODE=""
+MODE_SELECTED=""
+BRANCH_REF=""
+ORIGIN_BRANCH=""
+
+show_help() {
+	echo "Usage: $(basename "$0") [options]"
+	echo ""
+	echo "Lists changed files grouped by category with file mtime and path."
+	echo ""
+	echo "Output format: YYYY-MM-DD HH:MM:SS<TAB>path"
+	echo ""
+	echo "Options:"
+	echo "  -r, --recursive   Find git repos recursively from current directory"
+	echo "  -m, --modified    Show modified files only"
+	echo "  -n, --new         Show new files only"
+	echo "  -b, --branch <ref> Compare changes against a local ref (fetched or local)"
+	echo "  -o, --origin <branch> Compare changes against origin/<branch> after fetch"
+	echo "  -l, --local       Compare local working tree changes (default)"
+	echo "      --help        Show this help message"
+}
+
+while [[ $# -gt 0 ]]; do
+	case "$1" in
+		-r|--recursive)
+			RECURSIVE=true
+			shift
+			;;
+		-m|--modified)
+			SHOW_MODIFIED=true
+			shift
+			;;
+		-n|--new)
+			SHOW_NEW=true
+			shift
+			;;
+		-b|--branch)
+			if [[ -n "$MODE_SELECTED" ]] && [[ "$MODE_SELECTED" != "branch" ]]; then
+				echo "Error: --branch, --origin and --local are mutually exclusive"
+				exit 1
+			fi
+			if [[ -z "$2" || "$2" == -* ]]; then
+				echo "Error: --branch requires a ref argument"
+				exit 1
+			fi
+			MODE_SELECTED="branch"
+			BRANCH_REF="$2"
+			shift 2
+			;;
+		-o|--origin)
+			if [[ -n "$MODE_SELECTED" ]] && [[ "$MODE_SELECTED" != "origin" ]]; then
+				echo "Error: --branch, --origin and --local are mutually exclusive"
+				exit 1
+			fi
+			if [[ -z "$2" || "$2" == -* ]]; then
+				echo "Error: --origin requires a branch argument"
+				exit 1
+			fi
+			MODE_SELECTED="origin"
+			ORIGIN_BRANCH="$2"
+			shift 2
+			;;
+		-l|--local)
+			if [[ -n "$MODE_SELECTED" ]] && [[ "$MODE_SELECTED" != "local" ]]; then
+				echo "Error: --branch, --origin and --local are mutually exclusive"
+				exit 1
+			fi
+			MODE_SELECTED="local"
+			shift
+			;;
+		--help)
+			show_help
+			exit 0
+			;;
+		*)
+			echo "Unknown option: $1"
+			show_help
+			exit 1
+			;;
+	esac
+done
+
+if [[ -z "$MODE_SELECTED" ]]; then
+	COMPARE_MODE="local"
+else
+	COMPARE_MODE="$MODE_SELECTED"
+fi
+
+if [[ "$SHOW_MODIFIED" == false ]] && [[ "$SHOW_NEW" == false ]]; then
+	SHOW_MODIFIED=true
+	SHOW_NEW=true
+fi
+
+get_mtime() {
+	local file="$1"
+	if stat -c '%y' "$file" >/dev/null 2>&1; then
+		stat -c '%y' "$file" | cut -d'.' -f1
+	else
+		stat -f '%Sm' -t '%Y-%m-%d %H:%M:%S' "$file"
+	fi
+}
+
+discover_repos() {
+	if [[ "$RECURSIVE" == true ]]; then
+		find . \( -type d -name .git -o -type f -name .git \) -print \
+			| while IFS= read -r git_item; do
+				dirname "$git_item"
+			done \
+			| sed 's#^\./##' \
+			| sort -u
+	else
+		echo "."
+	fi
+}
+
+collect_worktree_changes() {
+	local repo="$1"
+
+	git -C "$repo" status --porcelain --untracked-files=all 2>/dev/null
+}
+
+print_category() {
+	local repo="$1"
+	local category="$2"
+	local files_list="$3"
+	local tmp_file
+
+	tmp_file=$(mktemp)
+
+	while IFS= read -r path; do
+		[[ -z "$path" ]] && continue
+		if [[ -e "$repo/$path" ]]; then
+			printf '%s\t%s\n' "$(get_mtime "$repo/$path")" "$path" >> "$tmp_file"
+		fi
+	done <<< "$files_list"
+
+	if [[ -s "$tmp_file" ]]; then
+		echo "$category"
+		sort -r "$tmp_file"
+		echo ""
+		rm -f "$tmp_file"
+		return 0
+	fi
+
+	rm -f "$tmp_file"
+	return 1
+}
+
+process_repo() {
+	local repo="$1"
+	local target_ref merge_base line status path old_path new_path status_code
+	local printed_any=false
+
+	declare -A modified_map=()
+	declare -A new_map=()
+
+	add_path() {
+		local bucket="$1"
+		local file_path="$2"
+		file_path="${file_path#./}"
+		[[ -z "$file_path" ]] && return
+
+		if [[ "$bucket" == "new" ]]; then
+			new_map["$file_path"]=1
+			unset 'modified_map[$file_path]'
+		else
+			if [[ -z "${new_map[$file_path]}" ]]; then
+				modified_map["$file_path"]=1
+			fi
+		fi
+	}
+
+	if [[ "$COMPARE_MODE" == "branch" ]] || [[ "$COMPARE_MODE" == "origin" ]]; then
+		if [[ "$COMPARE_MODE" == "branch" ]]; then
+			target_ref="$BRANCH_REF"
+			if ! git -C "$repo" rev-parse --verify --quiet "$target_ref^{commit}" >/dev/null; then
+				echo "Warning: ref '$target_ref' not found in repo '$repo', skipping" >&2
+				return 1
+			fi
+		else
+			target_ref="origin/$ORIGIN_BRANCH"
+			if ! git -C "$repo" fetch --quiet origin "$ORIGIN_BRANCH"; then
+				echo "Warning: could not fetch origin/$ORIGIN_BRANCH for repo '$repo', skipping" >&2
+				return 1
+			fi
+			if ! git -C "$repo" rev-parse --verify --quiet "$target_ref^{commit}" >/dev/null; then
+				echo "Warning: fetched branch '$target_ref' not found in repo '$repo', skipping" >&2
+				return 1
+			fi
+		fi
+
+		merge_base=$(git -C "$repo" merge-base HEAD "$target_ref" 2>/dev/null)
+		if [[ -z "$merge_base" ]]; then
+			echo "Warning: could not compute merge-base for repo '$repo' against '$target_ref'" >&2
+			return 1
+		fi
+
+		while IFS=$'\t' read -r status old_path new_path; do
+			[[ -z "$status" ]] && continue
+			status_code="${status:0:1}"
+
+			if [[ "$status_code" == "A" ]]; then
+				add_path "new" "$old_path"
+			elif [[ "$status_code" == "D" ]]; then
+				continue
+			elif [[ "$status_code" == "R" || "$status_code" == "C" ]]; then
+				add_path "modified" "$new_path"
+			else
+				add_path "modified" "$old_path"
+			fi
+		done < <(git -C "$repo" diff --name-status "$merge_base" HEAD --)
+	fi
+
+	while IFS= read -r line; do
+		[[ -z "$line" ]] && continue
+		status="${line:0:2}"
+		path="${line:3}"
+
+		if [[ "$path" == *" -> "* ]]; then
+			path="${path##* -> }"
+		fi
+
+		if [[ "$status" == "??" || "$status" == *"A"* ]]; then
+			add_path "new" "$path"
+		elif [[ "$status" == *"D"* ]]; then
+			continue
+		else
+			add_path "modified" "$path"
+		fi
+	done < <(collect_worktree_changes "$repo")
+
+	local modified_files=""
+	local new_files=""
+	local key
+
+	for key in "${!modified_map[@]}"; do
+		modified_files+="$key"$'\n'
+	done
+
+	for key in "${!new_map[@]}"; do
+		new_files+="$key"$'\n'
+	done
+
+	if [[ "$SHOW_MODIFIED" == true ]]; then
+		if print_category "$repo" "modified" "$modified_files"; then
+			printed_any=true
+		fi
+	fi
+
+	if [[ "$SHOW_NEW" == true ]]; then
+		if print_category "$repo" "new" "$new_files"; then
+			printed_any=true
+		fi
+	fi
+
+	if [[ "$printed_any" == false ]]; then
+		return 1
+	fi
+
+	return 0
+}
+
+mapfile -t REPOS < <(discover_repos)
+
+if [[ ${#REPOS[@]} -eq 0 ]]; then
+	echo "No git repositories found."
+	exit 1
+fi
+
+MULTI_REPO=false
+if [[ "$RECURSIVE" == true ]] && [[ ${#REPOS[@]} -gt 1 ]]; then
+	MULTI_REPO=true
+fi
+
+ANY_OUTPUT=false
+
+for repo in "${REPOS[@]}"; do
+	if [[ -z "$repo" ]]; then
+		continue
+	fi
+
+	if ! git -C "$repo" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+		continue
+	fi
+
+	if [[ "$MULTI_REPO" == true ]]; then
+		echo "repo: ${repo}"
+	fi
+
+	if process_repo "$repo"; then
+		ANY_OUTPUT=true
+		if [[ "$MULTI_REPO" == true ]]; then
+			echo ""
+		fi
+	elif [[ "$MULTI_REPO" == true ]]; then
+		echo ""
+	fi
+done
+
+if [[ "$ANY_OUTPUT" == false ]]; then
+	echo "No matching changed files found."
+fi
+
