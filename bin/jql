@@ -595,6 +595,75 @@ def resolve_output_mode(format_value):
         f"Supported formats: {supported}"
     )
 
+
+def parse_where_clause(clause):
+    """Parse a post-filter clause into a field name and wildcard pattern."""
+    if '=' not in clause:
+        raise ValueError('where clauses must use field=value syntax')
+
+    field_name, pattern = clause.split('=', 1)
+    field_name = field_name.strip()
+    pattern = pattern.strip()
+
+    if not field_name:
+        raise ValueError('empty field name in where clause')
+
+    if len(pattern) >= 2 and pattern[0] == pattern[-1] and pattern[0] in "\"'":
+        pattern = pattern[1:-1]
+
+    return field_name, pattern
+
+
+def resolve_text_value(issue, real, path, debug_flags):
+    """Resolve one issue field to a textual value for filtering/rendering."""
+    data = issue.get('fields', {})
+
+    if real in ['key', 'issuekey'] and not path:
+        return issue.get('key', '')
+
+    x = data.get(real, '')
+    if path:
+        return render_path_value(extract_path(x, path))
+    if 'json-objects' in debug_flags:
+        return json.dumps(x)
+
+    if isinstance(x, dict):
+        if 'displayName' in x:
+            return x['displayName']
+        if x.get('type') == 'doc':
+            return extract_text(x)
+        return x.get('value', x.get('name', str(x)))
+    if isinstance(x, list):
+        vals = []
+        for it in x:
+            if isinstance(it, dict):
+                if 'displayName' in it:
+                    vals.append(it['displayName'])
+                elif it.get('type') == 'doc':
+                    vals.append(extract_text(it))
+                else:
+                    vals.append(it.get('value', it.get('name', str(it))))
+            else:
+                vals.append(str(it))
+        return ','.join(vals)
+    if x is None:
+        return ''
+    return str(x)
+
+
+def matches_where_clause(issue, field_name, pattern, field_map, alias_map, debug_flags):
+    """Match a textual wildcard clause against one issue."""
+    real, path = resolve_field_id(field_name, field_map, alias_map)
+    value = resolve_text_value(issue, real, path, debug_flags)
+
+    value_text = (value or '').strip().lower()
+    pattern_text = (pattern or '').strip().lower()
+    if not pattern_text:
+        return not value_text
+
+    regex = '^' + re.escape(pattern_text).replace(r'\*', '.*') + '$'
+    return re.match(regex, value_text) is not None
+
 # Main
 
 def main():
@@ -680,6 +749,13 @@ def main():
         help='Sort by fields (comma-separated, prefix - for descending, e.g. -o status,-priority)'
     )
     parser.add_argument(
+        '-w', '--where',
+        action='append',
+        default=[],
+        metavar='FIELD=VALUE',
+        help='Post-filter results after fetching data using textual wildcard matching; repeat to combine with AND, e.g. -w status="In Progress" -w assignee="Paulo*"'
+    )
+    parser.add_argument(
         '-d', '--debug',
         help='Comma-separated debug flags (e.g. keep-json-objects)',
         default=''        
@@ -711,6 +787,11 @@ def main():
         update_field_cache(api, auth)
         field_map, alias_map, col_rename = load_maps()
 
+    try:
+        where_clauses = [parse_where_clause(clause) for clause in args.where]
+    except ValueError as exc:
+        parser.error(str(exc))
+
     id_map = fetch_id_map(api, auth)
 
     specs = build_field_specs(args.fields, field_map, alias_map, col_rename, id_map)
@@ -735,6 +816,11 @@ def main():
 
     # Only the root field is requested from Jira; paths are applied locally.
     query_fields = list(dict.fromkeys(real for _, real, _, _, _, _ in specs))
+    for field_name, _ in where_clauses:
+        real, _ = resolve_field_id(field_name, field_map, alias_map)
+        if real not in query_fields:
+            query_fields.append(real)
+
     url = f"{api}/rest/api/3/search/jql"
     params = {'jql': ' '.join(args.jql), 'fields': ','.join(query_fields)}
     issues = fetch_issues(url, auth, params, args.limit)
@@ -746,45 +832,16 @@ def main():
     use_color = args.color == 'always' or (args.color == 'auto' and sys.stdout.isatty())
     
     for issue in issues:
+        if where_clauses and not all(
+            matches_where_clause(issue, field_name, pattern, field_map, alias_map, debug_flags)
+            for field_name, pattern in where_clauses
+        ):
+            continue
+
         row_r = []
         row_v = []
-        data = issue.get('fields', {})
         for _, real, path, wrap, trunc, _ in specs:
-            if real in ['key','issuekey'] and not path:
-                val = issue.get('key', '')
-            else:
-                x = data.get(real, '')
-                if path:
-                    val = render_path_value(extract_path(x, path))
-                elif 'json-objects' in debug_flags:
-                    val = json.dumps(x)
-                else:
-                    if isinstance(x, dict):
-                        if 'displayName' in x:
-                            val = x['displayName']
-                        elif x.get('type') == 'doc':
-                            val = extract_text(x)
-                        else:
-                            val = x.get('value', x.get('name', str(x)))
-                    elif isinstance(x, list):
-                        vals = []
-                        for it in x:
-                            if isinstance(it, dict):
-                                if 'displayName' in it:
-                                    vals.append(it['displayName'])
-                                elif it.get('type') == 'doc':
-                                    vals.append(extract_text(it))
-                                else:
-                                    vals.append(it.get('value', it.get('name', str(it))))
-                            else:
-                                vals.append(str(it))
-                        val = ','.join(vals)
-                    elif x is None:
-                        # Jira sends unset fields as null; show them as blank.
-                        val = ''
-                    else:
-                        val = str(x)
-            val = val.strip()
+            val = resolve_text_value(issue, real, path, debug_flags).strip()
             row_r.append(val)
             if wrap is not None:
                 vis_val = textwrap.fill(val, width=wrap)
@@ -869,9 +926,9 @@ def main():
         ))
         if args.show_rows_count:
             if use_color:
-                print(f"\n{Style.BRIGHT}{Fore.WHITE}{len(issues)} rows{Style.RESET_ALL}\n")
+                print(f"\n{Style.BRIGHT}{Fore.WHITE}{len(rows_raw)} rows{Style.RESET_ALL}\n")
             else:
-                print(f"\n{len(issues)} rows\n")
+                print(f"\n{len(rows_raw)} rows\n")
 
 if __name__ == '__main__':
     main()
