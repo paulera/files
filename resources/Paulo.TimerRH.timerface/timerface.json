@@ -1,0 +1,67 @@
+{
+  "digits" : {
+    "digitsOffset" : {
+      "x" : 5,
+      "y" : 6
+    },
+    "underlayTint" : "#88888833",
+    "digitsSpacing" : -20,
+    "colonOffset" : {
+      "x" : 6,
+      "y" : -2
+    },
+    "font" : {
+      "name" : "DigitalDismay",
+      "size" : 117
+    },
+    "color" : "#FECB00"
+  },
+  "base" : "Paulo",
+  "status" : {
+    "font" : {
+      "name" : "System-Medium",
+      "size" : 20
+    },
+    "color" : "#AFB9BD",
+    "offset" : {
+      "x" : -9,
+      "y" : 29
+    }
+  },
+  "controls" : {
+    "size" : 20,
+    "kind" : "square.fill",
+    "weight" : "Regular",
+    "offset" : {
+      "x" : 90,
+      "y" : 29
+    },
+    "distance" : 30,
+    "color" : "#AFB9BD"
+  },
+  "switchColors" : {
+    "to" : "#FFB2D8",
+    "from" : "#FECB00"
+  },
+  "label" : {
+    "font" : {
+      "name" : "System-Medium",
+      "size" : 20
+    },
+    "color" : "#AFB9BD",
+    "offset" : 30
+  },
+  "background" : {
+    "color" : "#000000",
+    "imageAlpha" : 0.44103462837837837
+  },
+  "progress" : {
+    "canvasColor" : "#000000",
+    "offset" : -100,
+    "width" : 4,
+    "distance" : -10,
+    "color" : "#B0B9BD"
+  },
+  "name" : "Paulo",
+  "version" : 1
+}
