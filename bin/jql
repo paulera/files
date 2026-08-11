@@ -85,16 +85,23 @@ def get_color(field, value):
             fg = Style.BRIGHT + Fore.LIGHTWHITE_EX
             bg = Back.GREEN
         elif value == 'discarded':
-            fg = Fore.GREEN
+            fg = Style.DIM + Fore.GREEN
+        elif value == 'on production':
+            fg = Fore.BLACK
+            bg = Back.GREEN
         elif value in ['backlog','to do']:
             fg = Style.BRIGHT + Fore.WHITE
             bg = Back.LIGHTBLACK_EX
-        elif value in ['in progress', 'review', 'qa', 'ready to deploy']:
+        elif value in ['in progress', 'review', 'qa']:
             fg = Style.BRIGHT + Fore.WHITE
+            bg = Back.BLUE
+        elif value in ['ready to deploy']:
+            fg = Style.BRIGHT + Fore.CYAN
             bg = Back.BLUE
         elif value in ['blocked']:
             fg = Fore.BLACK
             bg = Back.LIGHTYELLOW_EX
+
     elif field == 'priority':
         if value == 'highest':
             fg = Style.BRIGHT + Fore.LIGHTRED_EX
@@ -106,6 +113,7 @@ def get_color(field, value):
             fg = Fore.LIGHTBLUE_EX
         elif value == 'lowest':
             fg = Style.DIM + Fore.LIGHTBLUE_EX
+
     elif field == 'issue type':
         if value == 'task':
             fg = Style.BRIGHT + Fore.LIGHTBLUE_EX
