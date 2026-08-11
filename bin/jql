@@ -597,13 +597,14 @@ def resolve_output_mode(format_value):
 
 
 def parse_where_clause(clause):
-    """Parse a post-filter clause into a field name and wildcard pattern."""
-    if '=' not in clause:
+    """Parse a post-filter clause into a field name, operator, and pattern."""
+    match = re.match(r'^(?P<field>.+?)(?P<op>-~~|-==|-~|-=|==|=|~~|~)(?P<value>.*)$', clause)
+    if not match:
         raise ValueError('where clauses must use field=value syntax')
 
-    field_name, pattern = clause.split('=', 1)
-    field_name = field_name.strip()
-    pattern = pattern.strip()
+    field_name = match.group('field').strip()
+    operator = match.group('op')
+    pattern = match.group('value').strip()
 
     if not field_name:
         raise ValueError('empty field name in where clause')
@@ -611,7 +612,7 @@ def parse_where_clause(clause):
     if len(pattern) >= 2 and pattern[0] == pattern[-1] and pattern[0] in "\"'":
         pattern = pattern[1:-1]
 
-    return field_name, pattern
+    return field_name, operator, pattern
 
 
 def resolve_text_value(issue, real, path, debug_flags):
@@ -651,18 +652,35 @@ def resolve_text_value(issue, real, path, debug_flags):
     return str(x)
 
 
-def matches_where_clause(issue, field_name, pattern, field_map, alias_map, debug_flags):
+def matches_where_clause(issue, field_name, operator, pattern, field_map, alias_map, debug_flags):
     """Match a textual wildcard clause against one issue."""
     real, path = resolve_field_id(field_name, field_map, alias_map)
     value = resolve_text_value(issue, real, path, debug_flags)
 
-    value_text = (value or '').strip().lower()
-    pattern_text = (pattern or '').strip().lower()
-    if not pattern_text:
-        return not value_text
+    value_text = (value or '').strip()
+    pattern_text = (pattern or '').strip()
 
-    regex = '^' + re.escape(pattern_text).replace(r'\*', '.*') + '$'
-    return re.match(regex, value_text) is not None
+    case_sensitive = operator in ('==', '-==', '~~', '-~~')
+    if not case_sensitive:
+        value_text = value_text.lower()
+        pattern_text = pattern_text.lower()
+
+    is_negated = operator.startswith('-')
+
+    if operator in ('~', '~~', '-~', '-~~'):
+        if not pattern_text:
+            return not bool(value_text) if is_negated else bool(value_text)
+        regex = re.escape(pattern_text).replace(r'\*', '.*')
+        matched = re.search(regex, value_text) is not None
+    else:
+        if not pattern_text:
+            return not value_text if is_negated else not value_text
+        regex = '^' + re.escape(pattern_text).replace(r'\*', '.*') + '$'
+        matched = re.match(regex, value_text) is not None
+
+    if is_negated:
+        return not matched
+    return matched
 
 # Main
 
@@ -752,8 +770,8 @@ def main():
         '-w', '--where',
         action='append',
         default=[],
-        metavar='FIELD=VALUE',
-        help='Post-filter results after fetching data using textual wildcard matching; repeat to combine with AND, e.g. -w status="In Progress" -w assignee="Paulo*"'
+        metavar='FIELD[OP]VALUE',
+        help='Post-filter results after fetching data using textual matching; repeat to combine with AND. Supported operators: =, -=, ~, ==, -==, ~~ (default: =). Double operators are case-sensistive, minus mean negation. Example: -w status="In Progress" -w assignee~"Paulo"'
     )
     parser.add_argument(
         '-d', '--debug',
@@ -816,7 +834,7 @@ def main():
 
     # Only the root field is requested from Jira; paths are applied locally.
     query_fields = list(dict.fromkeys(real for _, real, _, _, _, _ in specs))
-    for field_name, _ in where_clauses:
+    for field_name, _, _ in where_clauses:
         real, _ = resolve_field_id(field_name, field_map, alias_map)
         if real not in query_fields:
             query_fields.append(real)
@@ -833,8 +851,8 @@ def main():
     
     for issue in issues:
         if where_clauses and not all(
-            matches_where_clause(issue, field_name, pattern, field_map, alias_map, debug_flags)
-            for field_name, pattern in where_clauses
+            matches_where_clause(issue, field_name, operator, pattern, field_map, alias_map, debug_flags)
+            for field_name, operator, pattern in where_clauses
         ):
             continue
 
