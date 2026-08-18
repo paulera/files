@@ -11,9 +11,9 @@
 CLI tool to run JQL queries against Jira, with flexible output formats.
 
 Features:
-  * Wrap/truncate columns
+  * Wrap columns, and slice column values to a character range
   * Dot-notation paths into JSON fields (parent.fields.summary)
-  * Auto-cached field → API name map
+  * Auto-cached field -> API name map
   * Manual field aliases
   * Column header renaming (inline field=Header, or columns-rename.json)
     * Output formats: table/raw/json/csv (+ tabulate formats)
@@ -21,9 +21,9 @@ Features:
   * Query/row-count display flags
 
 Config dir ~/.jql-config/:
-  fields-map-cache.json   - auto field_name→id
-  fields-aliases.json     - user alias→field id
-  columns-rename.json     - user field→header rename
+  fields-map-cache.json   - auto field_name->id
+  fields-aliases.json     - user alias->field id
+  columns-rename.json     - user field->header rename
 
 Usage:
     jql [-f fields] [-fa fields] [-fr fields] [-fl]
@@ -42,6 +42,19 @@ Jira OAuth 2.0 scopes required:
                 read:field.option:jira
                 read:field:jira
                 read:group:jira
+
+Field notation (-f/--fields, -fa/--fields-add):
+  field           show the field value
+  field(N)        wrap the column at N characters
+  field{N}        keep the first N characters
+  field{-N}       keep the last N characters
+  field{I,N}      keep N characters starting at index I (0-based)
+  field{I,}       keep everything from index I to the end
+  field=Header    rename the column header
+
+  A range that runs past the end of the value yields as much as exists.
+  Hints go on the left of `=`, e.g. summary{5,20}=Title. Wrapping affects
+  only the rendered table, while {...} slicing applies to every format.
 
 Debug flags (comma-separated):
   keep-json-objects       show full JSON for complex fields
@@ -64,6 +77,10 @@ CACHE_FILE = os.path.join(CONFIG_DIR, "fields-map-cache.json")
 ALIASES_FILE = os.path.join(CONFIG_DIR, "fields-aliases.json")
 RENAME_FILE = os.path.join(CONFIG_DIR, "columns-rename.json")
 CF_RE = re.compile(r'^cf\[(\d+)\]$')
+SLICE_BODY_RE = re.compile(r'^[\s\d,-]*$')
+SLICE_HEAD_RE = re.compile(r'^(\d+)$')
+SLICE_TAIL_RE = re.compile(r'^-(\d+)$')
+SLICE_RANGE_RE = re.compile(r'^(\d+),(\d*)$')
 MISSING = object()
 COLOR_FIELDS = ('status', 'priority', 'issue type')
 COLOR_FIELD_ALIASES = {'issuetype': 'issue type'}
@@ -418,20 +435,104 @@ def load_maps():
     return field_map, alias_map, col_rename
 
 
+def split_field_tokens(text):
+    """Split a comma-separated field list into tokens.
+
+    The `{I,N}` slice hint puts a comma inside a field token, so a plain
+    `split(',')` would cut a token in half. Commas are only treated as
+    separators at brace depth zero. Empty tokens are dropped and surrounding
+    whitespace is trimmed, matching the previous behaviour.
+    """
+    tokens = []
+    current = []
+    depth = 0
+
+    for ch in text:
+        if ch == '{':
+            depth += 1
+        elif ch == '}':
+            depth = max(0, depth - 1)
+        elif ch == ',' and depth == 0:
+            tokens.append(''.join(current))
+            current = []
+            continue
+        current.append(ch)
+
+    tokens.append(''.join(current))
+    return [t.strip() for t in tokens if t.strip()]
+
+
+def parse_slice_body(body):
+    """Parse the inside of a `{...}` field hint into `(start, stop)` bounds.
+
+    Accepted forms, mirroring the documented notation:
+        - `N`    first N characters      -> (0, N)
+        - `-N`   last N characters       -> (-N, None)
+        - `I,N`  N characters from I     -> (I, I + N)
+        - `I,`   from I to the end       -> (I, None)
+
+    A negative index is only meaningful for the single-value form, so `-N` is
+    rejected inside the two-argument form. Bounds are returned as plain slice
+    indexes, which keeps out-of-range requests forgiving rather than fatal.
+    """
+    body = re.sub(r'\s+', '', body)
+
+    m = SLICE_HEAD_RE.match(body)
+    if m:
+        return 0, int(m.group(1))
+
+    m = SLICE_TAIL_RE.match(body)
+    if m:
+        count = int(m.group(1))
+        # `val[-0:]` would return everything, so ask for nothing explicitly.
+        return (-count, None) if count else (0, 0)
+
+    m = SLICE_RANGE_RE.match(body)
+    if m:
+        start = int(m.group(1))
+        if not m.group(2):
+            return start, None
+        return start, start + int(m.group(2))
+
+    sys.exit(
+        "Error: invalid field slice '{" + body + "}'. Use {N} for the first N "
+        "characters, {-N} for the last N, {I,N} for N characters from index I "
+        "(0-based), or {I,} from index I to the end."
+    )
+
+
+def apply_slice(value, bounds):
+    """Cut a display value down to the range requested by a `{...}` hint.
+
+    Python slicing already clamps to what is available, so a range that runs
+    past the end simply yields as much as exists. Surrounding whitespace left
+    behind by a cut is trimmed, matching how full values are rendered.
+    """
+    start, stop = bounds
+    return value[start:stop].strip()
+
+
 def parse_field_token(token):
     """Parse one field token into alias, formatting hints, and header override.
 
     Supported token forms:
         - `field` for no formatting hint
         - `field(30)` to wrap output to width 30
-        - `field{30}` to truncate output to width 30
+        - `field{30}` to keep the first 30 characters
+        - `field{-30}` to keep the last 30 characters
+        - `field{5,30}` to keep 30 characters starting at index 5 (0-based)
+        - `field{5,}` to keep everything from index 5 onwards
         - `field=Header` to rename the column header
 
     Width hints belong to the field definition, so they go on the left of the
     `=`: `summary(30)=Title`. The token is split on its first `=` only, which
     leaves headers free to contain `=` themselves.
 
-    Returns `(alias, wrap, trunc, header)`, where all but `alias` are optional.
+    Braces are only read as a slice hint when they contain slice-like
+    characters, so a field name that happens to use braces keeps working.
+
+    Returns `(alias, wrap, trunc, header)`, where all but `alias` are optional
+    and `trunc` is a `(start, stop)` pair.
     """
     token = token.strip()
     header = None
@@ -445,11 +546,11 @@ def parse_field_token(token):
     wrap = None
     trunc = None
     m1 = re.match(r'^(.+?)\((\d+)\)$', alias)
-    m2 = re.match(r'^(.+?)\{(\d+)\}$', alias)
+    m2 = re.match(r'^(.+?)\{([^}]*)\}$', alias)
     if m1:
         alias, wrap = m1.group(1), int(m1.group(2))
-    elif m2:
-        alias, trunc = m2.group(1), int(m2.group(2))
+    elif m2 and SLICE_BODY_RE.match(m2.group(2)):
+        alias, trunc = m2.group(1), parse_slice_body(m2.group(2))
 
     return alias, wrap, trunc, (header or None)
 
@@ -504,11 +605,7 @@ def build_field_specs(field_string, field_map, alias_map, col_rename, id_map):
     specs = []
     seen = set()
 
-    for token in field_string.split(','):
-        token = token.strip()
-        if not token:
-            continue
-
+    for token in split_field_tokens(field_string):
         alias, wrap, trunc, header_override = parse_field_token(token)
         real, path = resolve_field_id(alias, field_map, alias_map)
 
@@ -539,11 +636,7 @@ def normalize_field_list(field_values, field_map, alias_map):
     seen = set()
 
     for raw_value in field_values:
-        for token in raw_value.split(','):
-            token = token.strip()
-            if not token:
-                continue
-
+        for token in split_field_tokens(raw_value):
             alias, _, _, _ = parse_field_token(token)
             target = resolve_field_id(alias, field_map, alias_map)
 
@@ -711,8 +804,11 @@ def main():
     parser.add_argument(
         '-f', '--fields',
         default='key,issuetype(15),priority,status(15),summary(30),assignee(15)',
-        help='Fields list; supports dot paths into JSON fields and inline headers, '
-             'e.g. parent.fields.summary(30)=Epic, cf[10813]=Tr Date '
+        help='Fields list; supports dot paths into JSON fields, inline headers, '
+             'wrapping with field(N), and slicing with field{N} (first N chars), '
+             'field{-N} (last N chars), field{I,N} (N chars from 0-based index I) '
+             'or field{I,} (from I to the end); '
+             'e.g. parent.fields.summary(30)=Epic, cf[10813]{0,10}=Tr Date '
              '(default: key,issuetype(15),priority,status(15),summary(30),assignee(15))'
     )
     parser.add_argument(
@@ -868,11 +964,13 @@ def main():
         row_v = []
         for _, real, path, wrap, trunc, _ in specs:
             val = resolve_text_value(issue, real, path, debug_flags).strip()
+            # Slicing shapes the value itself, so it reaches every output
+            # format; wrapping only ever affects the rendered table.
+            if trunc is not None:
+                val = apply_slice(val, trunc)
             row_r.append(val)
             if wrap is not None:
                 vis_val = textwrap.fill(val, width=wrap)
-            elif trunc is not None:
-                vis_val = val[:trunc].strip()
             else:
                 vis_val = val
             
