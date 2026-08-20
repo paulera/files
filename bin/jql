@@ -21,7 +21,7 @@ Features:
   * Query/row-count display flags
 
 Config dir ~/.jql-config/:
-  fields-map-cache.json   - auto field_name->id
+  fields-cache.json       - auto field name<->id maps (rebuilt when stale)
   fields-aliases.json     - user alias->field id
   columns-rename.json     - user field->header rename
 
@@ -75,7 +75,8 @@ from colorama import Fore, Back, Style, init as colorama_init  # added
 
 # Constants
 CONFIG_DIR = os.path.expanduser("~/.jql-config")
-CACHE_FILE = os.path.join(CONFIG_DIR, "fields-map-cache.json")
+CACHE_FILE = os.path.join(CONFIG_DIR, "fields-cache.json")
+CACHE_VERSION = 2
 ALIASES_FILE = os.path.join(CONFIG_DIR, "fields-aliases.json")
 RENAME_FILE = os.path.join(CONFIG_DIR, "columns-rename.json")
 CF_RE = re.compile(r'^cf\[(\d+)\]$')
@@ -195,53 +196,86 @@ def save_json(path, obj):
         pass
 
 
-def fetch_issues(url, auth, params, limit):
-    """Fetch issues from Jira's enhanced search endpoint with pagination.
+class JiraClient:
+    """Every call jql makes to Jira, over one reused connection.
 
-    The function follows `nextPageToken` until Jira reports the last page.
-    It enforces the user limit (`-n`), where `-1` means fetch all available
-    pages. Returns a flat list of issue objects.
+    The field definition endpoint used to be hit from three separate places,
+    once per run even when nothing needed it. Here it is fetched at most once
+    per process and cached on disk between runs.
     """
-    issues = []
-    page = 100 if limit < 0 else min(limit, 100)
-    next_page_token = None
-    
-    while True:
-        current_params = params.copy()
-        current_params['maxResults'] = page
-        if next_page_token:
-            current_params['nextPageToken'] = next_page_token
-        
-        r = requests.get(url, auth=auth, params=current_params)
+
+    TIMEOUT = 60
+
+    def __init__(self, api, auth):
+        """Prepare a session for one Jira instance."""
+        self.api = api
+        self.session = requests.Session()
+        self.session.auth = auth
+        self._fields = None
+
+    def get(self, path, params=None):
+        """GET one endpoint, exiting with Jira's message on a bad response."""
+        r = self.session.get(f"{self.api}{path}", params=params,
+                             timeout=self.TIMEOUT)
         if r.status_code != 200:
             sys.exit(f"Error: {r.status_code} {r.text}")
-        
-        data = r.json()
-        batch = data.get('issues', [])
-        if not batch:
-            break
-        
-        issues.extend(batch)
-        
-        if limit >= 0 and len(issues) >= limit:
-            issues = issues[:limit]
-            break
-        
-        # Check if there are more results using isLast
-        if data.get('isLast', True):
-            break
-        
-        # Get next page token for pagination
-        next_page_token = data.get('nextPageToken')
-        if not next_page_token:
-            break
-        
-        # Adjust page size if we're close to the limit
-        if limit >= 0:
-            remaining = limit - len(issues)
-            page = min(page, remaining)
-    
-    return issues
+        return r.json()
+
+    def fields(self):
+        """Field definitions for this instance, fetched at most once.
+
+        Returns None when the lookup fails. Callers that only need headers
+        treat that as "no names available" and fall back to raw field ids,
+        which keeps a query working when only this endpoint is unhappy.
+        """
+        if self._fields is None:
+            try:
+                r = self.session.get(f"{self.api}/rest/api/3/field",
+                                     timeout=self.TIMEOUT)
+                self._fields = r.json() if r.status_code == 200 else False
+            except Exception:
+                self._fields = False
+        return self._fields or None
+
+    def search(self, jql, fields, limit):
+        """Fetch issues from the enhanced search endpoint, following pages.
+
+        Follows `nextPageToken` until Jira reports the last page, honouring
+        the user limit (`-n`), where `-1` means fetch every available page.
+        Returns a flat list of issue objects.
+        """
+        issues = []
+        page = 100 if limit < 0 else min(limit, 100)
+        next_page_token = None
+
+        while True:
+            params = {'jql': jql, 'fields': ','.join(fields), 'maxResults': page}
+            if next_page_token:
+                params['nextPageToken'] = next_page_token
+
+            data = self.get('/rest/api/3/search/jql', params)
+            batch = data.get('issues', [])
+            if not batch:
+                break
+
+            issues.extend(batch)
+
+            if limit >= 0 and len(issues) >= limit:
+                issues = issues[:limit]
+                break
+
+            if data.get('isLast', True):
+                break
+
+            next_page_token = data.get('nextPageToken')
+            if not next_page_token:
+                break
+
+            # Ask only for what is still missing when a limit is in play.
+            if limit >= 0:
+                page = min(page, limit - len(issues))
+
+        return issues
 
 
 def extract_text(node):
@@ -304,61 +338,62 @@ def render_path_value(value):
     return str(value)
 
 
-def fetch_id_map(api, auth):
-    """Build a map of Jira field IDs to human-readable names.
+def build_field_cache(client):
+    """Fetch the instance's fields and store both lookup directions.
 
-    The map is used for output headers and for applying column renames.
-    Returns an empty map when the lookup fails.
+    `by_name` powers flexible field input -- Jira field names, clause names
+    and aliases -- while `by_id` supplies the human-readable column headers
+    that used to cost a network round-trip on every single run. Custom
+    shorthand keys like `cf[12345]` are left out of `by_name`, because they
+    are resolved separately.
     """
-    try:
-        r = requests.get(f"{api}/rest/api/3/field", auth=auth)
-        if r.status_code != 200:
-            return {}
-        id_map = {}
-        for f in r.json():
-            id_map[f['id']] = f['name']
-        return id_map
-    except Exception:
-        return {}
+    defs = client.fields()
+    if not defs:
+        return None
 
-# Cache update
+    by_name = {}
+    by_id = {}
+    for f in defs:
+        fid, name = f['id'], f['name']
+        by_id[fid] = name
+        by_name[name] = fid
+        for clause in f.get('clauseNames', []) or []:
+            by_name[clause] = fid
 
-def update_field_cache(api, auth):
-    """Refresh the local cache that maps field names/clause names to IDs.
+    cache = {
+        'version': CACHE_VERSION,
+        'by_name': {k: v for k, v in by_name.items() if not CF_RE.match(k)},
+        'by_id': by_id,
+    }
+    ensure_config_dir()
+    save_json(CACHE_FILE, cache)
+    return cache
 
-    This powers flexible field input such as Jira field names, clause names,
-    and aliases. Custom shorthand keys like `cf[12345]` are not stored here,
-    because they are resolved separately.
+
+def load_field_cache(client, refresh=False):
+    """Read the field cache, rebuilding it when missing, stale or unreadable.
+
+    A cache written by an older jql has no matching `version`, so it is
+    simply rebuilt on first use rather than needing a migration step.
     """
-    try:
-        r = requests.get(f"{api}/rest/api/3/field", auth=auth)
-        if r.status_code != 200:
-            return
-        field_map = {}
-        for f in r.json():
-            fid, name = f['id'], f['name']
-            field_map[name] = fid
-            for clause in f.get('clauseNames', []) or []:
-                field_map[clause] = fid
-        field_map = {k: v for k, v in field_map.items() if not CF_RE.match(k)}
-        ensure_config_dir()
-        save_json(CACHE_FILE, field_map)
-    except Exception:
-        pass
+    if not refresh:
+        cache = load_json(CACHE_FILE)
+        if cache.get('version') == CACHE_VERSION and cache.get('by_name'):
+            return cache
+    return build_field_cache(client) or {'by_name': {}, 'by_id': {}}
 
 # List fields
 
-def list_fields(api, auth, category):
+def list_fields(client, category):
     """Print Jira fields for discovery and troubleshooting, then exit.
 
     Category controls which fields are shown: all, jira (system), or custom.
     Custom field IDs are printed in `cf[12345]` shorthand for convenience.
     """
     try:
-        r = requests.get(f"{api}/rest/api/3/field", auth=auth)
-        if r.status_code != 200:
+        fields = client.fields()
+        if fields is None:
             sys.exit("Error listing fields")
-        fields = r.json()
         if category == 'jira':
             fields = [f for f in fields if not f['id'].startswith('customfield_')]
         elif category == 'custom':
@@ -391,17 +426,14 @@ class FieldRegistry:
         self.id_map = id_map
 
     @classmethod
-    def load(cls, api, auth):
-        """Build a registry, refreshing the field cache when it is missing."""
-        field_map = load_json(CACHE_FILE) or {}
-        if not field_map:
-            update_field_cache(api, auth)
-            field_map = load_json(CACHE_FILE) or {}
+    def load(cls, client):
+        """Build a registry from the local config, refreshing a stale cache."""
+        cache = load_field_cache(client)
         return cls(
-            field_map,
+            cache.get('by_name', {}),
             load_json(ALIASES_FILE) or {},
             load_json(RENAME_FILE) or {},
-            fetch_id_map(api, auth),
+            cache.get('by_id', {}),
         )
 
     def lookup(self, name):
@@ -1123,6 +1155,7 @@ def main():
     """
     api = os.getenv('JIRA_URL', '').rstrip('/')
     auth = HTTPBasicAuth(os.getenv('JIRA_USER', ''), os.getenv('JIRA_API_TOKEN', ''))
+    client = JiraClient(api, auth)
     parser = build_parser()
     args = parser.parse_args()
 
@@ -1130,8 +1163,8 @@ def main():
 
     if args.jira_fields:
         if args.jira_fields == 'update':
-            update_field_cache(api, auth)
-        list_fields(api, auth, args.jira_fields)
+            load_field_cache(client, refresh=True)
+        list_fields(client, args.jira_fields)
 
     if not args.jql:
         parser.error('JQL query required')
@@ -1141,7 +1174,7 @@ def main():
     except ValueError as exc:
         parser.error(str(exc))
 
-    registry = FieldRegistry.load(api, auth)
+    registry = FieldRegistry.load(client)
     specs = resolve_specs(args, registry)
 
     if args.fields_list:
@@ -1155,9 +1188,7 @@ def main():
         if real not in query_fields:
             query_fields.append(real)
 
-    url = f"{api}/rest/api/3/search/jql"
-    params = {'jql': ' '.join(args.jql), 'fields': ','.join(query_fields)}
-    issues = fetch_issues(url, auth, params, args.limit)
+    issues = client.search(' '.join(args.jql), query_fields, args.limit)
 
     rows = build_rows(issues, specs, where_clauses, registry, debug_flags)
 
