@@ -86,6 +86,9 @@ SLICE_HEAD_RE = re.compile(r'^(\d+)$')
 SLICE_TAIL_RE = re.compile(r'^-(\d+)$')
 SLICE_RANGE_RE = re.compile(r'^(\d+),(\d*)$')
 MISSING = object()
+# The flag was documented as keep-json-objects but only ever tested for the
+# shorter spelling, so both are accepted.
+KEEP_JSON_FLAGS = frozenset({'keep-json-objects', 'json-objects'})
 COLOR_FIELDS = ('status', 'priority', 'issue type')
 COLOR_FIELD_ALIASES = {'issuetype': 'issue type'}
 
@@ -884,9 +887,11 @@ class WhereClause:
             pattern_text = pattern_text.lower()
 
         if not pattern_text:
+            # An empty pattern asks about presence: `field=` wants an empty
+            # value, `field~` wants any value, and negation flips each.
             if self.mode == 'contains':
                 return (not value_text) if self.negate else bool(value_text)
-            return (not value_text) if self.negate else (not value_text)
+            return bool(value_text) if self.negate else (not value_text)
 
         regex = re.escape(pattern_text).replace(r'\*', '.*')
         if self.mode == 'contains':
@@ -924,7 +929,7 @@ def resolve_text_value(issue, real, path, debug_flags):
     x = data.get(real, '')
     if path:
         return render_path_value(extract_path(x, path))
-    if 'json-objects' in debug_flags:
+    if debug_flags & KEEP_JSON_FLAGS:
         return json.dumps(x)
 
     if isinstance(x, list):
@@ -1207,7 +1212,7 @@ def main():
     parser = build_parser()
     args = parser.parse_args()
 
-    debug_flags = [f.strip() for f in args.debug.split(',') if f.strip()]
+    debug_flags = {f.strip() for f in args.debug.split(',') if f.strip()}
 
     if args.jira_fields:
         if args.jira_fields == 'update':
