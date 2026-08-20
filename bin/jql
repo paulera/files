@@ -5,7 +5,7 @@
 # ---------------------------------------------
 # never remove these    instructions:
 # * You must use the "enhanced search" endpoint https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issue-search/#api-rest-api-3-search-jql-get
-# * This is your test: `jql "Project = SPO and created > 2025-10-01 and created < 2026-01-01" -c` must be equal to 182
+# * This is your basic test: `jql "Project = SPO and created > 2025-10-01 and created < 2026-01-01" -c` must result in 182 entries | Other useful things for performing tests: | JQL query that wil contain items being worked on: "Project = SPO and created > 2026-01-01" | A call that uses many of the features, with a custom field cf[13917] that is "Last transition date": `jql "Project = 'SPO' AND Sprint in openSprints() ORDER BY statusorder ASC, cf[13917] ASC, updatedInfo DESC" -f "key,type,summary(30),assignee,status,cf[13917]{10}=Tr Date,cf[13917]{11,5}=Tr Time"` | Query conditions: | tasks with a particular label: "... and labels in ('security', 'tech-debt')" | tasks in the current sprint: "... and sprint in openSprints()"
 # ---------------------------------------------
 """
 CLI tool to run JQL queries against Jira, with flexible output formats.
@@ -301,22 +301,6 @@ def render_path_value(value):
     return str(value)
 
 
-def color_key(real, path, id_map):
-    """Pick the field name used to look up semantic colors for a column.
-
-    Plain fields use their Jira display name. Path fields search the path
-    right-to-left for a segment that has coloring rules, so that for example
-    `parent.fields.status.name` is colored like a status column.
-    """
-    if path:
-        for seg in reversed(path):
-            seg = seg.lower()
-            seg = COLOR_FIELD_ALIASES.get(seg, seg)
-            if seg in COLOR_FIELDS:
-                return seg
-    return id_map.get(real, real).lower()
-
-
 def fetch_id_map(api, auth):
     """Build a map of Jira field IDs to human-readable names.
 
@@ -385,9 +369,7 @@ def list_fields(api, auth, category):
         pass
     sys.exit(0)
 
-# Load maps
-
-# Load maps
+# --- Field resolution -------------------------------------------------------
 
 class _Reversed:
     """Comparison wrapper used to invert sort direction.
@@ -423,16 +405,97 @@ class _Reversed:
         return self.val == o.val
 
 
-def load_maps():
-    """Load all local mapping files used by field processing.
+class FieldRegistry:
+    """Everything jql knows locally about Jira field names and column headers.
 
-    Returns three dictionaries in order: field cache, alias map, and column
-    rename map. Missing files are converted to empty dictionaries.
+    Bundles the three on-disk maps under `~/.jql-config` with the id->name map
+    fetched from Jira, so callers pass one object instead of four dictionaries.
+    Every field-name question a column or a filter needs to ask is answered
+    here.
     """
-    field_map = load_json(CACHE_FILE) or {}
-    alias_map = load_json(ALIASES_FILE) or {}
-    col_rename = load_json(RENAME_FILE) or {}
-    return field_map, alias_map, col_rename
+
+    def __init__(self, field_map, alias_map, col_rename, id_map):
+        """Store the maps backing name resolution, headers, and coloring."""
+        self.field_map = field_map
+        self.alias_map = alias_map
+        self.col_rename = col_rename
+        self.id_map = id_map
+
+    @classmethod
+    def load(cls, api, auth):
+        """Build a registry, refreshing the field cache when it is missing."""
+        field_map = load_json(CACHE_FILE) or {}
+        if not field_map:
+            update_field_cache(api, auth)
+            field_map = load_json(CACHE_FILE) or {}
+        return cls(
+            field_map,
+            load_json(ALIASES_FILE) or {},
+            load_json(RENAME_FILE) or {},
+            fetch_id_map(api, auth),
+        )
+
+    def lookup(self, name):
+        """Resolve one exact field name to a Jira API field id, or None.
+
+        Resolution priority:
+            1. User alias mapping (`fields-aliases.json`)
+            2. `cf[12345]` shorthand
+            3. Cached field name/clause mapping
+        """
+        if name in self.alias_map:
+            return self.alias_map[name]
+
+        mcf = CF_RE.match(name)
+        if mcf:
+            return f"customfield_{mcf.group(1)}"
+
+        return self.field_map.get(name)
+
+    def resolve(self, alias):
+        """Resolve a user-entered field token into a field id and a JSON path.
+
+        The whole token is tried first, so field names containing dots keep
+        working. Otherwise the longest prefix that resolves becomes the field
+        and the remaining segments become the path used to drill into its JSON
+        value.
+
+        Returns `(real_field_id, path)`, where `path` is a tuple of segments.
+        """
+        direct = self.lookup(alias)
+        if direct:
+            return direct, ()
+
+        parts = alias.split('.')
+        for i in range(len(parts) - 1, 0, -1):
+            real = self.lookup('.'.join(parts[:i]))
+            if real:
+                return real, tuple(parts[i:])
+
+        return parts[0], tuple(parts[1:])
+
+    def display_name(self, real):
+        """Return the human-readable Jira name for a field id."""
+        return self.id_map.get(real, real)
+
+    def rename(self, header):
+        """Apply the user's `columns-rename.json` mapping to a header."""
+        return self.col_rename.get(header, header)
+
+    def color_key(self, real, path):
+        """Pick the field name used to look up semantic colors for a column.
+
+        Plain fields use their Jira display name. Path fields search the path
+        right-to-left for a segment that has coloring rules, so that for example
+        `parent.fields.status.name` is colored like a status column.
+        """
+        if path:
+            for seg in reversed(path):
+                seg = seg.lower()
+                seg = COLOR_FIELD_ALIASES.get(seg, seg)
+                if seg in COLOR_FIELDS:
+                    return seg
+        return self.display_name(real).lower()
 
 
 def split_field_tokens(text):
@@ -555,47 +618,7 @@ def parse_field_token(token):
     return alias, wrap, trunc, (header or None)
 
 
-def lookup_field_id(name, field_map, alias_map):
-    """Resolve one exact field name to a Jira API field id, or None.
-
-    Resolution priority:
-        1. User alias mapping (`fields-aliases.json`)
-        2. `cf[12345]` shorthand
-        3. Cached field name/clause mapping
-    """
-    if name in alias_map:
-        return alias_map[name]
-
-    mcf = CF_RE.match(name)
-    if mcf:
-        return f"customfield_{mcf.group(1)}"
-
-    return field_map.get(name)
-
-
-def resolve_field_id(alias, field_map, alias_map):
-    """Resolve a user-entered field token into a field id and a JSON path.
-
-    The whole token is tried first, so field names containing dots keep
-    working. Otherwise the longest prefix that resolves becomes the field and
-    the remaining segments become the path used to drill into its JSON value.
-
-    Returns `(real_field_id, path)`, where `path` is a tuple of segments.
-    """
-    direct = lookup_field_id(alias, field_map, alias_map)
-    if direct:
-        return direct, ()
-
-    parts = alias.split('.')
-    for i in range(len(parts) - 1, 0, -1):
-        real = lookup_field_id('.'.join(parts[:i]), field_map, alias_map)
-        if real:
-            return real, tuple(parts[i:])
-
-    return parts[0], tuple(parts[1:])
-
-
-def build_field_specs(field_string, field_map, alias_map, col_rename, id_map):
+def build_field_specs(field_string, registry):
     """Build the canonical field specification list for query and rendering.
 
     Each returned item is `(alias, real_field_id, path, wrap, trunc, header)`.
@@ -607,7 +630,7 @@ def build_field_specs(field_string, field_map, alias_map, col_rename, id_map):
 
     for token in split_field_tokens(field_string):
         alias, wrap, trunc, header_override = parse_field_token(token)
-        real, path = resolve_field_id(alias, field_map, alias_map)
+        real, path = registry.resolve(alias)
 
         spec_id = (real, path, wrap, trunc, header_override)
         if spec_id in seen:
@@ -617,15 +640,15 @@ def build_field_specs(field_string, field_map, alias_map, col_rename, id_map):
         if header_override:
             header = header_override
         else:
-            default_header = alias if path else id_map.get(real, real)
-            header = col_rename.get(default_header, default_header)
+            default_header = alias if path else registry.display_name(real)
+            header = registry.rename(default_header)
 
         specs.append((alias, real, path, wrap, trunc, header))
 
     return specs
 
 
-def normalize_field_list(field_values, field_map, alias_map):
+def normalize_field_list(field_values, registry):
     """Normalize one or more field lists into `(field_id, path)` pairs.
 
     This is used by `--fields-remove` so removals match the same resolution
@@ -638,7 +661,7 @@ def normalize_field_list(field_values, field_map, alias_map):
     for raw_value in field_values:
         for token in split_field_tokens(raw_value):
             alias, _, _, _ = parse_field_token(token)
-            target = resolve_field_id(alias, field_map, alias_map)
+            target = registry.resolve(alias)
 
             if target in seen:
                 continue
@@ -753,9 +776,9 @@ def resolve_text_value(issue, real, path, debug_flags):
     return str(x)
 
 
-def matches_where_clause(issue, field_name, operator, pattern, field_map, alias_map, debug_flags):
+def matches_where_clause(issue, field_name, operator, pattern, registry, debug_flags):
     """Match a textual wildcard clause against one issue."""
-    real, path = resolve_field_id(field_name, field_map, alias_map)
+    real, path = registry.resolve(field_name)
     value = resolve_text_value(issue, real, path, debug_flags)
 
     value_text = (value or '').strip()
@@ -904,22 +927,17 @@ def main():
     if not args.jql:
         parser.error('JQL query required')
 
-    field_map, alias_map, col_rename = load_maps()
-    if not field_map:
-        update_field_cache(api, auth)
-        field_map, alias_map, col_rename = load_maps()
-
     try:
         where_clauses = [parse_where_clause(clause) for clause in args.where]
     except ValueError as exc:
         parser.error(str(exc))
 
-    id_map = fetch_id_map(api, auth)
+    registry = FieldRegistry.load(api, auth)
 
-    specs = build_field_specs(args.fields, field_map, alias_map, col_rename, id_map)
+    specs = build_field_specs(args.fields, registry)
 
     if args.fields_add:
-        extra_specs = build_field_specs(','.join(args.fields_add), field_map, alias_map, col_rename, id_map)
+        extra_specs = build_field_specs(','.join(args.fields_add), registry)
         seen_fields = set((real, path, wrap, trunc, header) for _, real, path, wrap, trunc, header in specs)
         for spec in extra_specs:
             spec_id = (spec[1], spec[2], spec[3], spec[4], spec[5])
@@ -929,7 +947,7 @@ def main():
             seen_fields.add(spec_id)
 
     if args.fields_remove:
-        remove_fields = set(normalize_field_list(args.fields_remove, field_map, alias_map))
+        remove_fields = set(normalize_field_list(args.fields_remove, registry))
         specs = [spec for spec in specs if (spec[1], spec[2]) not in remove_fields]
 
     if args.fields_list:
@@ -939,7 +957,7 @@ def main():
     # Only the root field is requested from Jira; paths are applied locally.
     query_fields = list(dict.fromkeys(real for _, real, _, _, _, _ in specs))
     for field_name, _, _ in where_clauses:
-        real, _ = resolve_field_id(field_name, field_map, alias_map)
+        real, _ = registry.resolve(field_name)
         if real not in query_fields:
             query_fields.append(real)
 
@@ -955,7 +973,7 @@ def main():
     
     for issue in issues:
         if where_clauses and not all(
-            matches_where_clause(issue, field_name, operator, pattern, field_map, alias_map, debug_flags)
+            matches_where_clause(issue, field_name, operator, pattern, registry, debug_flags)
             for field_name, operator, pattern in where_clauses
         ):
             continue
@@ -976,7 +994,7 @@ def main():
             
             # Colorize if enabled
             if use_color:
-                vis_val = colorize(color_key(real, path, id_map), vis_val)
+                vis_val = colorize(registry.color_key(real, path), vis_val)
             
             row_v.append(vis_val)
         rows_raw.append(row_r)
