@@ -53,8 +53,10 @@ Field notation (-f/--fields, -fa/--fields-add):
   field=Header    rename the column header
 
   A range that runs past the end of the value yields as much as exists.
-  Hints go on the left of `=`, e.g. summary{5,20}=Title. Wrapping affects
-  only the rendered table, while {...} slicing applies to every format.
+  Hints go on the left of `=`, e.g. summary{5,20}=Title, and combine right to
+  left, e.g. summary{0,60}(20) crops to 60 characters then wraps at 20.
+  Wrapping affects only the rendered table, while {...} slicing applies to
+  every format.
 
 Debug flags (comma-separated):
   keep-json-objects       show full JSON for complex fields
@@ -371,40 +373,6 @@ def list_fields(api, auth, category):
     sys.exit(0)
 
 # --- Field resolution -------------------------------------------------------
-
-class _Reversed:
-    """Comparison wrapper used to invert sort direction.
-
-    Python's `sorted(..., key=...)` sorts ascending by default. Wrapping a
-    value in this class flips comparisons so selected columns can sort
-    descending while still using a single composite sort key.
-    """
-    __slots__ = ('val',)
-
-    def __init__(self, val):
-        """Store the value that will participate in inverted comparisons."""
-        self.val = val
-
-    def __lt__(self, o):
-        """Invert less-than so larger values come first."""
-        return self.val > o.val
-
-    def __le__(self, o):
-        """Invert less-or-equal to support descending ordering."""
-        return self.val >= o.val
-
-    def __gt__(self, o):
-        """Invert greater-than to support descending ordering."""
-        return self.val < o.val
-
-    def __ge__(self, o):
-        """Invert greater-or-equal to support descending ordering."""
-        return self.val <= o.val
-
-    def __eq__(self, o):
-        """Compare wrapped values for equality without inversion."""
-        return self.val == o.val
-
 
 class FieldRegistry:
     """Everything jql knows locally about Jira field names and column headers.
@@ -820,6 +788,23 @@ def parse_where_clause(clause):
     return field_name, operator, pattern
 
 
+def flatten_value(value):
+    """Render one decoded Jira value as display text.
+
+    Jira wraps most interesting values in an object: users carry a
+    `displayName`, rich text arrives as an ADF document, and option-like
+    fields use `value` or `name`. Multi-value fields hold a list of exactly
+    those shapes, so both the scalar and the list case share this cascade.
+    """
+    if isinstance(value, dict):
+        if 'displayName' in value:
+            return value['displayName']
+        if value.get('type') == 'doc':
+            return extract_text(value)
+        return value.get('value', value.get('name', str(value)))
+    return str(value)
+
+
 def resolve_text_value(issue, real, path, debug_flags):
     """Resolve one issue field to a textual value for filtering/rendering."""
     data = issue.get('fields', {})
@@ -833,28 +818,11 @@ def resolve_text_value(issue, real, path, debug_flags):
     if 'json-objects' in debug_flags:
         return json.dumps(x)
 
-    if isinstance(x, dict):
-        if 'displayName' in x:
-            return x['displayName']
-        if x.get('type') == 'doc':
-            return extract_text(x)
-        return x.get('value', x.get('name', str(x)))
     if isinstance(x, list):
-        vals = []
-        for it in x:
-            if isinstance(it, dict):
-                if 'displayName' in it:
-                    vals.append(it['displayName'])
-                elif it.get('type') == 'doc':
-                    vals.append(extract_text(it))
-                else:
-                    vals.append(it.get('value', it.get('name', str(it))))
-            else:
-                vals.append(str(it))
-        return ','.join(vals)
+        return ','.join(flatten_value(item) for item in x)
     if x is None:
         return ''
-    return str(x)
+    return flatten_value(x)
 
 
 def matches_where_clause(issue, field_name, operator, pattern, registry, debug_flags):
@@ -887,9 +855,157 @@ def matches_where_clause(issue, field_name, operator, pattern, registry, debug_f
         return not matched
     return matched
 
+# --- Row pipeline -----------------------------------------------------------
+
+def build_rows(issues, specs, where_clauses, registry, debug_flags):
+    """Turn fetched issues into rows of display strings, applying `-w` filters.
+
+    One row holds the raw (cropped, unwrapped, uncolored) text for every
+    column, which is what every output format is built from. Wrapping and
+    color are display concerns and belong to the table renderer.
+    """
+    rows = []
+    for issue in issues:
+        if where_clauses and not all(
+            matches_where_clause(issue, field_name, operator, pattern, registry, debug_flags)
+            for field_name, operator, pattern in where_clauses
+        ):
+            continue
+        rows.append([spec.raw_value(issue, debug_flags) for spec in specs])
+    return rows
+
+
+def sort_value(value):
+    """Coerce one cell into a sortable key: numbers first, then folded text.
+
+    Every key is the same shape, so a column that mixes numbers and text stays
+    comparable instead of failing part-way through a sort.
+    """
+    try:
+        return (0, float(value), '')
+    except ValueError:
+        return (1, 0.0, value.lower())
+
+
+def sort_rows(rows, specs, order):
+    """Sort rows in place by a comma-separated `-o` list, `-` meaning descending.
+
+    Columns are matched by alias or by header. Python's sort is stable, so
+    running one pass per key from the least significant to the most gives the
+    same ordering a composite key would, without needing to invert
+    comparisons for descending columns.
+    """
+    order_keys = []
+    for token in order.split(','):
+        token = token.strip()
+        if not token:
+            continue
+        desc = token.startswith('-')
+        fname = token.lstrip('-').strip().lower()
+        col_idx = None
+        for i, spec in enumerate(specs):
+            if spec.alias.lower() == fname or spec.header.lower() == fname:
+                col_idx = i
+                break
+        if col_idx is None:
+            sys.exit(f"Error: sort field '{fname}' not found in output fields")
+        order_keys.append((col_idx, desc))
+
+    for col_idx, desc in reversed(order_keys):
+        rows.sort(key=lambda row: sort_value(row[col_idx]), reverse=desc)
+    return rows
+
+
+# --- Output renderers -------------------------------------------------------
+
+def highlight(text, style, use_color):
+    """Wrap text in a color style, or return it untouched when color is off."""
+    if not use_color:
+        return text
+    return f"{style}{text}{Style.RESET_ALL}"
+
+
+def render_raw(rows, specs, args, registry, use_color, table_format):
+    """Print one separator-joined line per row."""
+    for row in rows:
+        print(args.sep.join(row))
+
+
+def render_json(rows, specs, args, registry, use_color, table_format):
+    """Print rows as a JSON array of objects keyed by normalized headers."""
+    keys = build_json_keys([spec.header for spec in specs])
+    payload = [{key: row[i] for i, key in enumerate(keys)} for row in rows]
+    print(json.dumps(payload, ensure_ascii=False, indent=2))
+
+
+def render_csv(rows, specs, args, registry, use_color, table_format):
+    """Print rows as CSV with a header line."""
+    writer = csv.writer(sys.stdout)
+    writer.writerow([spec.header for spec in specs])
+    writer.writerows(rows)
+
+
+def render_table(rows, specs, args, registry, use_color, table_format):
+    """Print rows as a tabulate table, applying wrapping and color.
+
+    This is the only format that shapes values for display, so wrapping and
+    semantic coloring are applied here rather than when rows are built.
+    """
+    if args.show_query:
+        query = highlight(' '.join(args.jql), Style.BRIGHT + Fore.YELLOW, use_color)
+        print(f"\n{query}\n")
+
+    headers = [highlight(spec.header, Style.BRIGHT + Fore.WHITE, use_color)
+               for spec in specs]
+    display_rows = [
+        [spec.display(value, registry, use_color)
+         for spec, value in zip(specs, row)]
+        for row in rows
+    ]
+
+    if args.numbers:
+        display_rows = [[str(i + 1)] + row for i, row in enumerate(display_rows)]
+        headers = ['#'] + headers
+
+    print(tabulate(display_rows, headers=headers, tablefmt=table_format))
+
+    if args.show_rows_count:
+        count = highlight(f"{len(rows)} rows", Style.BRIGHT + Fore.WHITE, use_color)
+        print(f"\n{count}\n")
+
+
+RENDERERS = {
+    'raw': render_raw,
+    'json': render_json,
+    'csv': render_csv,
+    'table': render_table,
+}
+
+
 # Main
 
-def main():
+def resolve_specs(args, registry):
+    """Build the final column list from `-f`, then `-fa`, then `-fr`."""
+    specs = build_field_specs(args.fields, registry)
+
+    if args.fields_add:
+        extra_specs = build_field_specs(','.join(args.fields_add), registry)
+        seen_fields = set(spec.key() for spec in specs)
+        for spec in extra_specs:
+            if spec.key() in seen_fields:
+                continue
+            specs.append(spec)
+            seen_fields.add(spec.key())
+
+    if args.fields_remove:
+        remove_fields = set(normalize_field_list(args.fields_remove, registry))
+        specs = [spec for spec in specs if spec.target() not in remove_fields]
+
+    return specs
+
+
+def build_parser():
+    """Build the command-line parser."""
     """CLI entry point.
 
     Responsibilities:
@@ -899,8 +1015,6 @@ def main():
         - Optionally print final field list (`--fields-list`)
         - Query Jira and render selected output format
     """
-    api = os.getenv('JIRA_URL', '').rstrip('/')
-    auth = HTTPBasicAuth(os.getenv('JIRA_USER', ''), os.getenv('JIRA_API_TOKEN', ''))
     parser = argparse.ArgumentParser(
         formatter_class=argparse.RawDescriptionHelpFormatter,
         description=__doc__
@@ -908,10 +1022,8 @@ def main():
     parser.add_argument(
         '-f', '--fields',
         default='key,issuetype(15),priority,status(15),summary(30),assignee(15)',
-        help='Fields list; supports dot paths into JSON fields, inline headers, '
-             'wrapping with field(N), and slicing with field{N} (first N chars), '
-             'field{-N} (last N chars), field{I,N} (N chars from 0-based index I) '
-             'or field{I,} (from I to the end); '
+        help='Fields list; supports dot paths, inline headers and the (N)/{...} '
+             'hints described under "Field notation" above; '
              'e.g. parent.fields.summary(30)=Epic, cf[10813]{0,10}=Tr Date '
              '(default: key,issuetype(15),priority,status(15),summary(30),assignee(15))'
     )
@@ -996,6 +1108,22 @@ def main():
         'jql', nargs='*',
         help='The JQL query to execute'
     )
+    return parser
+
+
+def main():
+    """CLI entry point.
+
+    Responsibilities:
+        - Parse command-line arguments
+        - Handle maintenance commands (jira field listing/cache update)
+        - Resolve final field set (`--fields`, `--fields-add`, `--fields-remove`)
+        - Optionally print final field list (`--fields-list`)
+        - Query Jira and render selected output format
+    """
+    api = os.getenv('JIRA_URL', '').rstrip('/')
+    auth = HTTPBasicAuth(os.getenv('JIRA_USER', ''), os.getenv('JIRA_API_TOKEN', ''))
+    parser = build_parser()
     args = parser.parse_args()
 
     debug_flags = [f.strip() for f in args.debug.split(',') if f.strip()]
@@ -1014,21 +1142,7 @@ def main():
         parser.error(str(exc))
 
     registry = FieldRegistry.load(api, auth)
-
-    specs = build_field_specs(args.fields, registry)
-
-    if args.fields_add:
-        extra_specs = build_field_specs(','.join(args.fields_add), registry)
-        seen_fields = set(spec.key() for spec in specs)
-        for spec in extra_specs:
-            if spec.key() in seen_fields:
-                continue
-            specs.append(spec)
-            seen_fields.add(spec.key())
-
-    if args.fields_remove:
-        remove_fields = set(normalize_field_list(args.fields_remove, registry))
-        specs = [spec for spec in specs if spec.target() not in remove_fields]
+    specs = resolve_specs(args, registry)
 
     if args.fields_list:
         print(','.join(spec.query_path() for spec in specs))
@@ -1045,99 +1159,14 @@ def main():
     params = {'jql': ' '.join(args.jql), 'fields': ','.join(query_fields)}
     issues = fetch_issues(url, auth, params, args.limit)
 
-    rows_raw = []
-    rows_vis = []
-    
-    # Determine if color should be used
-    use_color = args.color == 'always' or (args.color == 'auto' and sys.stdout.isatty())
-    
-    for issue in issues:
-        if where_clauses and not all(
-            matches_where_clause(issue, field_name, operator, pattern, registry, debug_flags)
-            for field_name, operator, pattern in where_clauses
-        ):
-            continue
-
-        row_r = []
-        row_v = []
-        for spec in specs:
-            val = spec.raw_value(issue, debug_flags)
-            row_r.append(val)
-            row_v.append(spec.display(val, registry, use_color))
-        rows_raw.append(row_r)
-        rows_vis.append(row_v)
+    rows = build_rows(issues, specs, where_clauses, registry, debug_flags)
 
     if args.order:
-        order_keys = []
-        for token in args.order.split(','):
-            token = token.strip()
-            if not token:
-                continue
-            desc = token.startswith('-')
-            fname = token.lstrip('-').strip().lower()
-            col_idx = None
-            for i, spec in enumerate(specs):
-                if spec.alias.lower() == fname or spec.header.lower() == fname:
-                    col_idx = i
-                    break
-            if col_idx is None:
-                sys.exit(f"Error: sort field '{fname}' not found in output fields")
-            order_keys.append((col_idx, desc))
-
-        def _sort_key(pair):
-            row_r = pair[0]
-            key = []
-            for col_idx, desc in order_keys:
-                val = row_r[col_idx]
-                try:
-                    v = float(val)
-                except ValueError:
-                    v = val.lower()
-                key.append(_Reversed(v) if desc else v)
-            return key
-
-        paired = sorted(zip(rows_raw, rows_vis), key=_sort_key)
-        rows_raw, rows_vis = (list(x) for x in zip(*paired)) if paired else ([], [])
+        sort_rows(rows, specs, args.order)
 
     output_mode, table_format = resolve_output_mode(args.format)
-    base_headers = [spec.header for spec in specs]
-
-    if output_mode == 'raw':
-        for r in rows_raw:
-            print(args.sep.join(r))
-    elif output_mode == 'json':
-        keys = build_json_keys(base_headers)
-        payload = []
-        for row in rows_raw:
-            payload.append({key: row[i] for i, key in enumerate(keys)})
-        print(json.dumps(payload, ensure_ascii=False, indent=2))
-    elif output_mode == 'csv':
-        writer = csv.writer(sys.stdout)
-        writer.writerow(base_headers)
-        writer.writerows(rows_raw)
-    else:
-        if args.show_query:
-            if use_color:
-                print(f"\n{Style.BRIGHT}{Fore.YELLOW}{' '.join(args.jql)}{Style.RESET_ALL}\n")
-            else:
-                print(f"\n{' '.join(args.jql)}\n")
-        if use_color:
-            headers = [f"{Style.BRIGHT}{Fore.WHITE}{spec.header}{Style.RESET_ALL}" for spec in specs]
-        else:
-            headers = [spec.header for spec in specs]
-        if args.numbers:
-            rows_vis = [[str(i+1)] + r for i, r in enumerate(rows_vis)]
-            headers = ['#'] + headers
-        print(tabulate(
-            rows_vis,
-            headers=headers,
-            tablefmt=table_format
-        ))
-        if args.show_rows_count:
-            if use_color:
-                print(f"\n{Style.BRIGHT}{Fore.WHITE}{len(rows_raw)} rows{Style.RESET_ALL}\n")
-            else:
-                print(f"\n{len(rows_raw)} rows\n")
+    use_color = args.color == 'always' or (args.color == 'auto' and sys.stdout.isatty())
+    RENDERERS[output_mode](rows, specs, args, registry, use_color, table_format)
 
 if __name__ == '__main__':
     main()
