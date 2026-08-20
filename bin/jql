@@ -78,6 +78,7 @@ ALIASES_FILE = os.path.join(CONFIG_DIR, "fields-aliases.json")
 RENAME_FILE = os.path.join(CONFIG_DIR, "columns-rename.json")
 CF_RE = re.compile(r'^cf\[(\d+)\]$')
 SLICE_BODY_RE = re.compile(r'^[\s\d,-]*$')
+WRAP_BODY_RE = re.compile(r'^\d+$')
 SLICE_HEAD_RE = re.compile(r'^(\d+)$')
 SLICE_TAIL_RE = re.compile(r'^-(\d+)$')
 SLICE_RANGE_RE = re.compile(r'^(\d+),(\d*)$')
@@ -575,67 +576,93 @@ def apply_slice(value, bounds):
     return value[start:stop].strip()
 
 
-def parse_field_token(token):
-    """Parse one field token into alias, formatting hints, and header override.
+def parse_field_hints(alias):
+    """Peel `(...)` and `{...}` formatting hints off the end of a field alias.
 
-    Supported token forms:
-        - `field` for no formatting hint
-        - `field(30)` to wrap output to width 30
-        - `field{30}` to keep the first 30 characters
-        - `field{-30}` to keep the last 30 characters
-        - `field{5,30}` to keep 30 characters starting at index 5 (0-based)
-        - `field{5,}` to keep everything from index 5 onwards
-        - `field=Header` to rename the column header
+    Hints are read right to left, so they combine: `summary{0,40}(20)` crops to
+    the first 40 characters and then wraps the column at 20. A trailing group
+    whose body is not a valid hint stops the scan and is left as part of the
+    name, which keeps field names containing brackets working -- `cf[13917]`
+    and a literal `summary{a,b}` both survive untouched.
 
-    Width hints belong to the field definition, so they go on the left of the
-    `=`: `summary(30)=Title`. The token is split on its first `=` only, which
-    leaves headers free to contain `=` themselves.
-
-    Braces are only read as a slice hint when they contain slice-like
-    characters, so a field name that happens to use braces keeps working.
-
-    Returns `(alias, wrap, trunc, header)`, where all but `alias` are optional
-    and `trunc` is a `(start, stop)` pair.
+    Returns `(alias, wrap, crop)`, where `crop` is a `(start, stop)` pair.
     """
-    token = token.strip()
-    header = None
-
-    if '=' in token:
-        field_part, header_part = token.split('=', 1)
-        token = field_part.strip()
-        header = header_part.strip()
-
-    alias = token
     wrap = None
-    trunc = None
-    m1 = re.match(r'^(.+?)\((\d+)\)$', alias)
-    m2 = re.match(r'^(.+?)\{([^}]*)\}$', alias)
-    if m1:
-        alias, wrap = m1.group(1), int(m1.group(2))
-    elif m2 and SLICE_BODY_RE.match(m2.group(2)):
-        alias, trunc = m2.group(1), parse_slice_body(m2.group(2))
+    crop = None
 
-    return alias, wrap, trunc, (header or None)
+    while alias and alias[-1] in ')}':
+        opener = '(' if alias[-1] == ')' else '{'
+        idx = alias.rfind(opener)
+        # `idx == 0` would leave an empty field name, so treat it as no hint.
+        if idx <= 0:
+            break
+
+        body = alias[idx + 1:-1]
+        if opener == '(':
+            if not WRAP_BODY_RE.match(body):
+                break
+            wrap = int(body)
+        else:
+            if not SLICE_BODY_RE.match(body):
+                break
+            crop = parse_slice_body(body)
+
+        alias = alias[:idx]
+
+    return alias, wrap, crop
 
 
-def build_field_specs(field_string, registry):
-    """Build the canonical field specification list for query and rendering.
+class FieldSpec:
+    """One output column: what to read, how to shape it, what to call it.
 
-    Each returned item is `(alias, real_field_id, path, wrap, trunc, header)`.
-    Only fully identical specs are dropped: `key` and `parent.key` resolve to
-    different columns even though both read a key. First-seen order is kept.
+    The column is the unit that grows whenever jql learns a new notation, so
+    everything about one lives here: parsing its token, its deduplication
+    identity, reading its value out of an issue, and rendering it. Adding a
+    hint means adding a slot, a branch in `parse_field_hints`, and a line in
+    `display` -- nothing outside this class needs to know.
     """
-    specs = []
-    seen = set()
 
-    for token in split_field_tokens(field_string):
-        alias, wrap, trunc, header_override = parse_field_token(token)
+    __slots__ = ('alias', 'real', 'path', 'header', 'header_override',
+                 'wrap', 'crop')
+
+    def __init__(self, alias, real, path, header, header_override=None,
+                 wrap=None, crop=None):
+        """Store the resolved field, its formatting hints, and its header."""
+        self.alias = alias
+        self.real = real
+        self.path = path
+        self.header = header
+        self.header_override = header_override
+        self.wrap = wrap
+        self.crop = crop
+
+    @classmethod
+    def parse(cls, token, registry):
+        """Build a spec from one field token such as `summary{5,20}=Title`.
+
+        Supported token forms:
+            - `field` for no formatting hint
+            - `field(30)` to wrap output to width 30
+            - `field{30}` to keep the first 30 characters
+            - `field{-30}` to keep the last 30 characters
+            - `field{5,30}` to keep 30 characters starting at index 5 (0-based)
+            - `field{5,}` to keep everything from index 5 onwards
+            - `field=Header` to rename the column header
+
+        Formatting hints belong to the field definition, so they go on the left
+        of the `=`: `summary(30)=Title`. The token is split on its first `=`
+        only, which leaves headers free to contain `=` themselves.
+        """
+        token = token.strip()
+        header_override = None
+
+        if '=' in token:
+            field_part, header_part = token.split('=', 1)
+            token = field_part.strip()
+            header_override = header_part.strip() or None
+
+        alias, wrap, crop = parse_field_hints(token)
         real, path = registry.resolve(alias)
-
-        spec_id = (real, path, wrap, trunc, header_override)
-        if spec_id in seen:
-            continue
-        seen.add(spec_id)
 
         if header_override:
             header = header_override
@@ -643,7 +670,62 @@ def build_field_specs(field_string, registry):
             default_header = alias if path else registry.display_name(real)
             header = registry.rename(default_header)
 
-        specs.append((alias, real, path, wrap, trunc, header))
+        return cls(alias, real, path, header, header_override, wrap, crop)
+
+    def key(self):
+        """Identity used to drop exactly-duplicated columns.
+
+        Only fully identical specs collapse: `key` and `parent.key` are
+        different columns, and so are two different crops of one custom field.
+        The header override is compared as written rather than as resolved, so
+        an explicit `=Status` stays distinct from the default header.
+        """
+        return (self.real, self.path, self.wrap, self.crop,
+                self.header_override)
+
+    def target(self):
+        """`(field id, path)` pair used to match `--fields-remove` entries."""
+        return (self.real, self.path)
+
+    def query_path(self):
+        """Dot path shown by `--fields-list`."""
+        return '.'.join((self.real,) + self.path)
+
+    def raw_value(self, issue, debug_flags):
+        """Read this column's value out of one issue, cropped but not wrapped.
+
+        Cropping shapes the value itself so it reaches every output format;
+        wrapping is display-only and belongs to `display`.
+        """
+        value = resolve_text_value(issue, self.real, self.path, debug_flags)
+        value = value.strip()
+        if self.crop is not None:
+            value = apply_slice(value, self.crop)
+        return value
+
+    def display(self, value, registry, use_color):
+        """Shape one already-resolved value for the rendered table."""
+        if self.wrap is not None:
+            value = textwrap.fill(value, width=self.wrap)
+        if use_color:
+            value = colorize(registry.color_key(self.real, self.path), value)
+        return value
+
+
+def build_field_specs(field_string, registry):
+    """Parse a comma-separated field list into `FieldSpec` columns.
+
+    Exactly duplicated specs are dropped; first-seen order is kept.
+    """
+    specs = []
+    seen = set()
+
+    for token in split_field_tokens(field_string):
+        spec = FieldSpec.parse(token, registry)
+        if spec.key() in seen:
+            continue
+        seen.add(spec.key())
+        specs.append(spec)
 
     return specs
 
@@ -660,8 +742,7 @@ def normalize_field_list(field_values, registry):
 
     for raw_value in field_values:
         for token in split_field_tokens(raw_value):
-            alias, _, _, _ = parse_field_token(token)
-            target = registry.resolve(alias)
+            target = FieldSpec.parse(token, registry).target()
 
             if target in seen:
                 continue
@@ -938,24 +1019,23 @@ def main():
 
     if args.fields_add:
         extra_specs = build_field_specs(','.join(args.fields_add), registry)
-        seen_fields = set((real, path, wrap, trunc, header) for _, real, path, wrap, trunc, header in specs)
+        seen_fields = set(spec.key() for spec in specs)
         for spec in extra_specs:
-            spec_id = (spec[1], spec[2], spec[3], spec[4], spec[5])
-            if spec_id in seen_fields:
+            if spec.key() in seen_fields:
                 continue
             specs.append(spec)
-            seen_fields.add(spec_id)
+            seen_fields.add(spec.key())
 
     if args.fields_remove:
         remove_fields = set(normalize_field_list(args.fields_remove, registry))
-        specs = [spec for spec in specs if (spec[1], spec[2]) not in remove_fields]
+        specs = [spec for spec in specs if spec.target() not in remove_fields]
 
     if args.fields_list:
-        print(','.join('.'.join((real,) + path) for _, real, path, _, _, _ in specs))
+        print(','.join(spec.query_path() for spec in specs))
         return
 
     # Only the root field is requested from Jira; paths are applied locally.
-    query_fields = list(dict.fromkeys(real for _, real, _, _, _, _ in specs))
+    query_fields = list(dict.fromkeys(spec.real for spec in specs))
     for field_name, _, _ in where_clauses:
         real, _ = registry.resolve(field_name)
         if real not in query_fields:
@@ -980,23 +1060,10 @@ def main():
 
         row_r = []
         row_v = []
-        for _, real, path, wrap, trunc, _ in specs:
-            val = resolve_text_value(issue, real, path, debug_flags).strip()
-            # Slicing shapes the value itself, so it reaches every output
-            # format; wrapping only ever affects the rendered table.
-            if trunc is not None:
-                val = apply_slice(val, trunc)
+        for spec in specs:
+            val = spec.raw_value(issue, debug_flags)
             row_r.append(val)
-            if wrap is not None:
-                vis_val = textwrap.fill(val, width=wrap)
-            else:
-                vis_val = val
-            
-            # Colorize if enabled
-            if use_color:
-                vis_val = colorize(registry.color_key(real, path), vis_val)
-            
-            row_v.append(vis_val)
+            row_v.append(spec.display(val, registry, use_color))
         rows_raw.append(row_r)
         rows_vis.append(row_v)
 
@@ -1009,8 +1076,8 @@ def main():
             desc = token.startswith('-')
             fname = token.lstrip('-').strip().lower()
             col_idx = None
-            for i, (alias, real, path, wrap, trunc, header) in enumerate(specs):
-                if alias.lower() == fname or header.lower() == fname:
+            for i, spec in enumerate(specs):
+                if spec.alias.lower() == fname or spec.header.lower() == fname:
                     col_idx = i
                     break
             if col_idx is None:
@@ -1033,7 +1100,7 @@ def main():
         rows_raw, rows_vis = (list(x) for x in zip(*paired)) if paired else ([], [])
 
     output_mode, table_format = resolve_output_mode(args.format)
-    base_headers = [h for _, _, _, _, _, h in specs]
+    base_headers = [spec.header for spec in specs]
 
     if output_mode == 'raw':
         for r in rows_raw:
@@ -1055,9 +1122,9 @@ def main():
             else:
                 print(f"\n{' '.join(args.jql)}\n")
         if use_color:
-            headers = [f"{Style.BRIGHT}{Fore.WHITE}{h}{Style.RESET_ALL}" for _,_,_,_,_,h in specs]
+            headers = [f"{Style.BRIGHT}{Fore.WHITE}{spec.header}{Style.RESET_ALL}" for spec in specs]
         else:
-            headers = [h for _,_,_,_,_,h in specs]
+            headers = [spec.header for spec in specs]
         if args.numbers:
             rows_vis = [[str(i+1)] + r for i, r in enumerate(rows_vis)]
             headers = ['#'] + headers
