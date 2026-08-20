@@ -801,23 +801,100 @@ def resolve_output_mode(format_value):
     )
 
 
-def parse_where_clause(clause):
-    """Parse a post-filter clause into a field name, operator, and pattern."""
-    match = re.match(r'^(?P<field>.+?)(?P<op>-~~|-==|-~|-=|==|=|~~|~)(?P<value>.*)$', clause)
-    if not match:
-        raise ValueError('where clauses must use field=value syntax')
+class WhereClause:
+    """One `-w` post-filter: a field, an operator, and a pattern.
 
-    field_name = match.group('field').strip()
-    operator = match.group('op')
-    pattern = match.group('value').strip()
+    What each operator means is a table rather than a chain of conditionals,
+    so adding one is a single row plus whatever `matches` needs to honour it.
+    The field is resolved when the clause is parsed instead of once per issue.
+    """
 
-    if not field_name:
-        raise ValueError('empty field name in where clause')
+    # operator -> (match mode, negated, case sensitive)
+    OPERATORS = {
+        '-~~': ('contains', True, True),
+        '-==': ('exact', True, True),
+        '-~': ('contains', True, False),
+        '-=': ('exact', True, False),
+        '==': ('exact', False, True),
+        '~~': ('contains', False, True),
+        '=': ('exact', False, False),
+        '~': ('contains', False, False),
+    }
 
-    if len(pattern) >= 2 and pattern[0] == pattern[-1] and pattern[0] in "\"'":
-        pattern = pattern[1:-1]
+    # Longest operator first, so `-~~` is never read as `-~` followed by `~`.
+    CLAUSE_RE = re.compile(
+        r'^(?P<field>.+?)(?P<op>'
+        + '|'.join(re.escape(op)
+                   for op in sorted(OPERATORS, key=len, reverse=True))
+        + r')(?P<value>.*)$'
+    )
 
-    return field_name, operator, pattern
+    __slots__ = ('field_name', 'real', 'path', 'pattern', 'mode', 'negate',
+                 'case_sensitive')
+
+    def __init__(self, field_name, real, path, pattern, mode, negate,
+                 case_sensitive):
+        """Store the resolved field and the decoded operator behaviour."""
+        self.field_name = field_name
+        self.real = real
+        self.path = path
+        self.pattern = pattern
+        self.mode = mode
+        self.negate = negate
+        self.case_sensitive = case_sensitive
+
+    @classmethod
+    def parse(cls, clause, registry):
+        """Build a clause from one `-w` argument such as `status=In Progress`.
+
+        A quoted pattern keeps its inner text, so shells that pass the quotes
+        through do not end up matching against them.
+        """
+        match = cls.CLAUSE_RE.match(clause)
+        if not match:
+            raise ValueError('where clauses must use field=value syntax')
+
+        field_name = match.group('field').strip()
+        pattern = match.group('value').strip()
+
+        if not field_name:
+            raise ValueError('empty field name in where clause')
+
+        if len(pattern) >= 2 and pattern[0] == pattern[-1] and pattern[0] in "\"'":
+            pattern = pattern[1:-1]
+
+        mode, negate, case_sensitive = cls.OPERATORS[match.group('op')]
+        real, path = registry.resolve(field_name)
+        return cls(field_name, real, path, pattern, mode, negate,
+                   case_sensitive)
+
+    def matches(self, issue, debug_flags):
+        """Test this clause against one issue's textual field value.
+
+        `*` in a pattern is the only wildcard; everything else is literal.
+        An exact clause anchors the whole value, a contains clause does not.
+        """
+        value = resolve_text_value(issue, self.real, self.path, debug_flags)
+
+        value_text = (value or '').strip()
+        pattern_text = (self.pattern or '').strip()
+
+        if not self.case_sensitive:
+            value_text = value_text.lower()
+            pattern_text = pattern_text.lower()
+
+        if not pattern_text:
+            if self.mode == 'contains':
+                return (not value_text) if self.negate else bool(value_text)
+            return (not value_text) if self.negate else (not value_text)
+
+        regex = re.escape(pattern_text).replace(r'\*', '.*')
+        if self.mode == 'contains':
+            matched = re.search(regex, value_text) is not None
+        else:
+            matched = re.match('^' + regex + '$', value_text) is not None
+
+        return (not matched) if self.negate else matched
 
 
 def flatten_value(value):
@@ -857,39 +934,9 @@ def resolve_text_value(issue, real, path, debug_flags):
     return flatten_value(x)
 
 
-def matches_where_clause(issue, field_name, operator, pattern, registry, debug_flags):
-    """Match a textual wildcard clause against one issue."""
-    real, path = registry.resolve(field_name)
-    value = resolve_text_value(issue, real, path, debug_flags)
-
-    value_text = (value or '').strip()
-    pattern_text = (pattern or '').strip()
-
-    case_sensitive = operator in ('==', '-==', '~~', '-~~')
-    if not case_sensitive:
-        value_text = value_text.lower()
-        pattern_text = pattern_text.lower()
-
-    is_negated = operator.startswith('-')
-
-    if operator in ('~', '~~', '-~', '-~~'):
-        if not pattern_text:
-            return not bool(value_text) if is_negated else bool(value_text)
-        regex = re.escape(pattern_text).replace(r'\*', '.*')
-        matched = re.search(regex, value_text) is not None
-    else:
-        if not pattern_text:
-            return not value_text if is_negated else not value_text
-        regex = '^' + re.escape(pattern_text).replace(r'\*', '.*') + '$'
-        matched = re.match(regex, value_text) is not None
-
-    if is_negated:
-        return not matched
-    return matched
-
 # --- Row pipeline -----------------------------------------------------------
 
-def build_rows(issues, specs, where_clauses, registry, debug_flags):
+def build_rows(issues, specs, where_clauses, debug_flags):
     """Turn fetched issues into rows of display strings, applying `-w` filters.
 
     One row holds the raw (cropped, unwrapped, uncolored) text for every
@@ -898,10 +945,7 @@ def build_rows(issues, specs, where_clauses, registry, debug_flags):
     """
     rows = []
     for issue in issues:
-        if where_clauses and not all(
-            matches_where_clause(issue, field_name, operator, pattern, registry, debug_flags)
-            for field_name, operator, pattern in where_clauses
-        ):
+        if not all(clause.matches(issue, debug_flags) for clause in where_clauses):
             continue
         rows.append([spec.raw_value(issue, debug_flags) for spec in specs])
     return rows
@@ -1123,7 +1167,11 @@ def build_parser():
         action='append',
         default=[],
         metavar='FIELD[OP]VALUE',
-        help='Post-filter results after fetching data using textual matching; repeat to combine with AND. Supported operators: =, -=, ~, ==, -==, ~~ (default: =). Double operators are case-sensistive, minus mean negation. Example: -w status="In Progress" -w assignee~"Paulo"'
+        help='Post-filter results after fetching data using textual matching; '
+             'repeat to combine with AND. Operators: = exact, ~ contains '
+             '(default: =); double them for case-sensitive (==, ~~); prefix '
+             'with - to negate (-=, -~, -==, -~~). * is a wildcard. '
+             'Example: -w status="In Progress" -w assignee~"Paulo"'
     )
     parser.add_argument(
         '-d', '--debug',
@@ -1169,12 +1217,14 @@ def main():
     if not args.jql:
         parser.error('JQL query required')
 
+    registry = FieldRegistry.load(client)
+
     try:
-        where_clauses = [parse_where_clause(clause) for clause in args.where]
+        where_clauses = [WhereClause.parse(clause, registry)
+                         for clause in args.where]
     except ValueError as exc:
         parser.error(str(exc))
 
-    registry = FieldRegistry.load(client)
     specs = resolve_specs(args, registry)
 
     if args.fields_list:
@@ -1183,14 +1233,13 @@ def main():
 
     # Only the root field is requested from Jira; paths are applied locally.
     query_fields = list(dict.fromkeys(spec.real for spec in specs))
-    for field_name, _, _ in where_clauses:
-        real, _ = registry.resolve(field_name)
-        if real not in query_fields:
-            query_fields.append(real)
+    for clause in where_clauses:
+        if clause.real not in query_fields:
+            query_fields.append(clause.real)
 
     issues = client.search(' '.join(args.jql), query_fields, args.limit)
 
-    rows = build_rows(issues, specs, where_clauses, registry, debug_flags)
+    rows = build_rows(issues, specs, where_clauses, debug_flags)
 
     if args.order:
         sort_rows(rows, specs, args.order)
