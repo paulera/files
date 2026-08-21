@@ -5,7 +5,7 @@
 # ---------------------------------------------
 # never remove these    instructions:
 # * You must use the "enhanced search" endpoint https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issue-search/#api-rest-api-3-search-jql-get
-# * This is your test: `jql "Project = SPO and created > 2025-10-01 and created < 2026-01-01" -c` must be equal to 182
+# * This is your basic test: `jql "Project = SPO and created > 2025-10-01 and created < 2026-01-01" -c` must result in 182 entries | Other useful things for performing tests: | JQL query that wil contain items being worked on: "Project = SPO and created > 2026-01-01" | A call that uses many of the features, with a custom field cf[13917] that is "Last transition date": `jql "Project = 'SPO' AND Sprint in openSprints() ORDER BY statusorder ASC, cf[13917] ASC, updatedInfo DESC" -f "key,type,summary(30),assignee,status,cf[13917]{10}=Tr Date,cf[13917]{11,5}=Tr Time"` | Query conditions: | tasks with a particular label: "... and labels in ('security', 'tech-debt')" | tasks in the current sprint: "... and sprint in openSprints()"
 # ---------------------------------------------
 """
 CLI tool to run JQL queries against Jira, with flexible output formats.
@@ -21,7 +21,7 @@ Features:
   * Query/row-count display flags
 
 Config dir ~/.jql-config/:
-  fields-map-cache.json   - auto field_name->id
+  fields-cache.json       - auto field name<->id maps (rebuilt when stale)
   fields-aliases.json     - user alias->field id
   columns-rename.json     - user field->header rename
 
@@ -53,8 +53,10 @@ Field notation (-f/--fields, -fa/--fields-add):
   field=Header    rename the column header
 
   A range that runs past the end of the value yields as much as exists.
-  Hints go on the left of `=`, e.g. summary{5,20}=Title. Wrapping affects
-  only the rendered table, while {...} slicing applies to every format.
+  Hints go on the left of `=`, e.g. summary{5,20}=Title, and combine right to
+  left, e.g. summary{0,60}(20) crops to 60 characters then wraps at 20.
+  Wrapping affects only the rendered table, while {...} slicing applies to
+  every format.
 
 Debug flags (comma-separated):
   keep-json-objects       show full JSON for complex fields
@@ -73,15 +75,20 @@ from colorama import Fore, Back, Style, init as colorama_init  # added
 
 # Constants
 CONFIG_DIR = os.path.expanduser("~/.jql-config")
-CACHE_FILE = os.path.join(CONFIG_DIR, "fields-map-cache.json")
+CACHE_FILE = os.path.join(CONFIG_DIR, "fields-cache.json")
+CACHE_VERSION = 2
 ALIASES_FILE = os.path.join(CONFIG_DIR, "fields-aliases.json")
 RENAME_FILE = os.path.join(CONFIG_DIR, "columns-rename.json")
 CF_RE = re.compile(r'^cf\[(\d+)\]$')
 SLICE_BODY_RE = re.compile(r'^[\s\d,-]*$')
+WRAP_BODY_RE = re.compile(r'^\d+$')
 SLICE_HEAD_RE = re.compile(r'^(\d+)$')
 SLICE_TAIL_RE = re.compile(r'^-(\d+)$')
 SLICE_RANGE_RE = re.compile(r'^(\d+),(\d*)$')
 MISSING = object()
+# The flag was documented as keep-json-objects but only ever tested for the
+# shorter spelling, so both are accepted.
+KEEP_JSON_FLAGS = frozenset({'keep-json-objects', 'json-objects'})
 COLOR_FIELDS = ('status', 'priority', 'issue type')
 COLOR_FIELD_ALIASES = {'issuetype': 'issue type'}
 
@@ -192,53 +199,86 @@ def save_json(path, obj):
         pass
 
 
-def fetch_issues(url, auth, params, limit):
-    """Fetch issues from Jira's enhanced search endpoint with pagination.
+class JiraClient:
+    """Every call jql makes to Jira, over one reused connection.
 
-    The function follows `nextPageToken` until Jira reports the last page.
-    It enforces the user limit (`-n`), where `-1` means fetch all available
-    pages. Returns a flat list of issue objects.
+    The field definition endpoint used to be hit from three separate places,
+    once per run even when nothing needed it. Here it is fetched at most once
+    per process and cached on disk between runs.
     """
-    issues = []
-    page = 100 if limit < 0 else min(limit, 100)
-    next_page_token = None
-    
-    while True:
-        current_params = params.copy()
-        current_params['maxResults'] = page
-        if next_page_token:
-            current_params['nextPageToken'] = next_page_token
-        
-        r = requests.get(url, auth=auth, params=current_params)
+
+    TIMEOUT = 60
+
+    def __init__(self, api, auth):
+        """Prepare a session for one Jira instance."""
+        self.api = api
+        self.session = requests.Session()
+        self.session.auth = auth
+        self._fields = None
+
+    def get(self, path, params=None):
+        """GET one endpoint, exiting with Jira's message on a bad response."""
+        r = self.session.get(f"{self.api}{path}", params=params,
+                             timeout=self.TIMEOUT)
         if r.status_code != 200:
             sys.exit(f"Error: {r.status_code} {r.text}")
-        
-        data = r.json()
-        batch = data.get('issues', [])
-        if not batch:
-            break
-        
-        issues.extend(batch)
-        
-        if limit >= 0 and len(issues) >= limit:
-            issues = issues[:limit]
-            break
-        
-        # Check if there are more results using isLast
-        if data.get('isLast', True):
-            break
-        
-        # Get next page token for pagination
-        next_page_token = data.get('nextPageToken')
-        if not next_page_token:
-            break
-        
-        # Adjust page size if we're close to the limit
-        if limit >= 0:
-            remaining = limit - len(issues)
-            page = min(page, remaining)
-    
-    return issues
+        return r.json()
+
+    def fields(self):
+        """Field definitions for this instance, fetched at most once.
+
+        Returns None when the lookup fails. Callers that only need headers
+        treat that as "no names available" and fall back to raw field ids,
+        which keeps a query working when only this endpoint is unhappy.
+        """
+        if self._fields is None:
+            try:
+                r = self.session.get(f"{self.api}/rest/api/3/field",
+                                     timeout=self.TIMEOUT)
+                self._fields = r.json() if r.status_code == 200 else False
+            except Exception:
+                self._fields = False
+        return self._fields or None
+
+    def search(self, jql, fields, limit):
+        """Fetch issues from the enhanced search endpoint, following pages.
+
+        Follows `nextPageToken` until Jira reports the last page, honouring
+        the user limit (`-n`), where `-1` means fetch every available page.
+        Returns a flat list of issue objects.
+        """
+        issues = []
+        page = 100 if limit < 0 else min(limit, 100)
+        next_page_token = None
+
+        while True:
+            params = {'jql': jql, 'fields': ','.join(fields), 'maxResults': page}
+            if next_page_token:
+                params['nextPageToken'] = next_page_token
+
+            data = self.get('/rest/api/3/search/jql', params)
+            batch = data.get('issues', [])
+            if not batch:
+                break
+
+            issues.extend(batch)
+
+            if limit >= 0 and len(issues) >= limit:
+                issues = issues[:limit]
+                break
+
+            if data.get('isLast', True):
+                break
+
+            next_page_token = data.get('nextPageToken')
+            if not next_page_token:
+                break
+
+            # Ask only for what is still missing when a limit is in play.
+            if limit >= 0:
+                page = min(page, limit - len(issues))
+
+        return issues
 
 
 def extract_text(node):
@@ -301,77 +341,62 @@ def render_path_value(value):
     return str(value)
 
 
-def color_key(real, path, id_map):
-    """Pick the field name used to look up semantic colors for a column.
+def build_field_cache(client):
+    """Fetch the instance's fields and store both lookup directions.
 
-    Plain fields use their Jira display name. Path fields search the path
-    right-to-left for a segment that has coloring rules, so that for example
-    `parent.fields.status.name` is colored like a status column.
+    `by_name` powers flexible field input -- Jira field names, clause names
+    and aliases -- while `by_id` supplies the human-readable column headers
+    that used to cost a network round-trip on every single run. Custom
+    shorthand keys like `cf[12345]` are left out of `by_name`, because they
+    are resolved separately.
     """
-    if path:
-        for seg in reversed(path):
-            seg = seg.lower()
-            seg = COLOR_FIELD_ALIASES.get(seg, seg)
-            if seg in COLOR_FIELDS:
-                return seg
-    return id_map.get(real, real).lower()
+    defs = client.fields()
+    if not defs:
+        return None
+
+    by_name = {}
+    by_id = {}
+    for f in defs:
+        fid, name = f['id'], f['name']
+        by_id[fid] = name
+        by_name[name] = fid
+        for clause in f.get('clauseNames', []) or []:
+            by_name[clause] = fid
+
+    cache = {
+        'version': CACHE_VERSION,
+        'by_name': {k: v for k, v in by_name.items() if not CF_RE.match(k)},
+        'by_id': by_id,
+    }
+    ensure_config_dir()
+    save_json(CACHE_FILE, cache)
+    return cache
 
 
-def fetch_id_map(api, auth):
-    """Build a map of Jira field IDs to human-readable names.
+def load_field_cache(client, refresh=False):
+    """Read the field cache, rebuilding it when missing, stale or unreadable.
 
-    The map is used for output headers and for applying column renames.
-    Returns an empty map when the lookup fails.
+    A cache written by an older jql has no matching `version`, so it is
+    simply rebuilt on first use rather than needing a migration step.
     """
-    try:
-        r = requests.get(f"{api}/rest/api/3/field", auth=auth)
-        if r.status_code != 200:
-            return {}
-        id_map = {}
-        for f in r.json():
-            id_map[f['id']] = f['name']
-        return id_map
-    except Exception:
-        return {}
-
-# Cache update
-
-def update_field_cache(api, auth):
-    """Refresh the local cache that maps field names/clause names to IDs.
-
-    This powers flexible field input such as Jira field names, clause names,
-    and aliases. Custom shorthand keys like `cf[12345]` are not stored here,
-    because they are resolved separately.
-    """
-    try:
-        r = requests.get(f"{api}/rest/api/3/field", auth=auth)
-        if r.status_code != 200:
-            return
-        field_map = {}
-        for f in r.json():
-            fid, name = f['id'], f['name']
-            field_map[name] = fid
-            for clause in f.get('clauseNames', []) or []:
-                field_map[clause] = fid
-        field_map = {k: v for k, v in field_map.items() if not CF_RE.match(k)}
-        ensure_config_dir()
-        save_json(CACHE_FILE, field_map)
-    except Exception:
-        pass
+    if not refresh:
+        cache = load_json(CACHE_FILE)
+        if cache.get('version') == CACHE_VERSION and cache.get('by_name'):
+            return cache
+    return build_field_cache(client) or {'by_name': {}, 'by_id': {}}
 
 # List fields
 
-def list_fields(api, auth, category):
+def list_fields(client, category):
     """Print Jira fields for discovery and troubleshooting, then exit.
 
     Category controls which fields are shown: all, jira (system), or custom.
     Custom field IDs are printed in `cf[12345]` shorthand for convenience.
     """
     try:
-        r = requests.get(f"{api}/rest/api/3/field", auth=auth)
-        if r.status_code != 200:
+        fields = client.fields()
+        if fields is None:
             sys.exit("Error listing fields")
-        fields = r.json()
         if category == 'jira':
             fields = [f for f in fields if not f['id'].startswith('customfield_')]
         elif category == 'custom':
@@ -385,54 +410,96 @@ def list_fields(api, auth, category):
         pass
     sys.exit(0)
 
-# Load maps
+# --- Field resolution -------------------------------------------------------
 
-# Load maps
+class FieldRegistry:
+    """Everything jql knows locally about Jira field names and column headers.
 
-class _Reversed:
-    """Comparison wrapper used to invert sort direction.
-
-    Python's `sorted(..., key=...)` sorts ascending by default. Wrapping a
-    value in this class flips comparisons so selected columns can sort
-    descending while still using a single composite sort key.
+    Bundles the three on-disk maps under `~/.jql-config` with the id->name map
+    fetched from Jira, so callers pass one object instead of four dictionaries.
+    Every field-name question a column or a filter needs to ask is answered
+    here.
     """
-    __slots__ = ('val',)
 
-    def __init__(self, val):
-        """Store the value that will participate in inverted comparisons."""
-        self.val = val
+    def __init__(self, field_map, alias_map, col_rename, id_map):
+        """Store the maps backing name resolution, headers, and coloring."""
+        self.field_map = field_map
+        self.alias_map = alias_map
+        self.col_rename = col_rename
+        self.id_map = id_map
 
-    def __lt__(self, o):
-        """Invert less-than so larger values come first."""
-        return self.val > o.val
+    @classmethod
+    def load(cls, client):
+        """Build a registry from the local config, refreshing a stale cache."""
+        cache = load_field_cache(client)
+        return cls(
+            cache.get('by_name', {}),
+            load_json(ALIASES_FILE) or {},
+            load_json(RENAME_FILE) or {},
+            cache.get('by_id', {}),
+        )
 
-    def __le__(self, o):
-        """Invert less-or-equal to support descending ordering."""
-        return self.val >= o.val
+    def lookup(self, name):
+        """Resolve one exact field name to a Jira API field id, or None.
 
-    def __gt__(self, o):
-        """Invert greater-than to support descending ordering."""
-        return self.val < o.val
+        Resolution priority:
+            1. User alias mapping (`fields-aliases.json`)
+            2. `cf[12345]` shorthand
+            3. Cached field name/clause mapping
+        """
+        if name in self.alias_map:
+            return self.alias_map[name]
 
-    def __ge__(self, o):
-        """Invert greater-or-equal to support descending ordering."""
-        return self.val <= o.val
+        mcf = CF_RE.match(name)
+        if mcf:
+            return f"customfield_{mcf.group(1)}"
 
-    def __eq__(self, o):
-        """Compare wrapped values for equality without inversion."""
-        return self.val == o.val
+        return self.field_map.get(name)
 
+    def resolve(self, alias):
+        """Resolve a user-entered field token into a field id and a JSON path.
 
-def load_maps():
-    """Load all local mapping files used by field processing.
+        The whole token is tried first, so field names containing dots keep
+        working. Otherwise the longest prefix that resolves becomes the field
+        and the remaining segments become the path used to drill into its JSON
+        value.
 
-    Returns three dictionaries in order: field cache, alias map, and column
-    rename map. Missing files are converted to empty dictionaries.
-    """
-    field_map = load_json(CACHE_FILE) or {}
-    alias_map = load_json(ALIASES_FILE) or {}
-    col_rename = load_json(RENAME_FILE) or {}
-    return field_map, alias_map, col_rename
+        Returns `(real_field_id, path)`, where `path` is a tuple of segments.
+        """
+        direct = self.lookup(alias)
+        if direct:
+            return direct, ()
+
+        parts = alias.split('.')
+        for i in range(len(parts) - 1, 0, -1):
+            real = self.lookup('.'.join(parts[:i]))
+            if real:
+                return real, tuple(parts[i:])
+
+        return parts[0], tuple(parts[1:])
+
+    def display_name(self, real):
+        """Return the human-readable Jira name for a field id."""
+        return self.id_map.get(real, real)
+
+    def rename(self, header):
+        """Apply the user's `columns-rename.json` mapping to a header."""
+        return self.col_rename.get(header, header)
+
+    def color_key(self, real, path):
+        """Pick the field name used to look up semantic colors for a column.
+
+        Plain fields use their Jira display name. Path fields search the path
+        right-to-left for a segment that has coloring rules, so that for example
+        `parent.fields.status.name` is colored like a status column.
+        """
+        if path:
+            for seg in reversed(path):
+                seg = seg.lower()
+                seg = COLOR_FIELD_ALIASES.get(seg, seg)
+                if seg in COLOR_FIELDS:
+                    return seg
+        return self.display_name(real).lower()
 
 
 def split_field_tokens(text):
@@ -512,120 +579,161 @@ def apply_slice(value, bounds):
     return value[start:stop].strip()
 
 
-def parse_field_token(token):
-    """Parse one field token into alias, formatting hints, and header override.
+def parse_field_hints(alias):
+    """Peel `(...)` and `{...}` formatting hints off the end of a field alias.
 
-    Supported token forms:
-        - `field` for no formatting hint
-        - `field(30)` to wrap output to width 30
-        - `field{30}` to keep the first 30 characters
-        - `field{-30}` to keep the last 30 characters
-        - `field{5,30}` to keep 30 characters starting at index 5 (0-based)
-        - `field{5,}` to keep everything from index 5 onwards
-        - `field=Header` to rename the column header
+    Hints are read right to left, so they combine: `summary{0,40}(20)` crops to
+    the first 40 characters and then wraps the column at 20. A trailing group
+    whose body is not a valid hint stops the scan and is left as part of the
+    name, which keeps field names containing brackets working -- `cf[13917]`
+    and a literal `summary{a,b}` both survive untouched.
 
-    Width hints belong to the field definition, so they go on the left of the
-    `=`: `summary(30)=Title`. The token is split on its first `=` only, which
-    leaves headers free to contain `=` themselves.
-
-    Braces are only read as a slice hint when they contain slice-like
-    characters, so a field name that happens to use braces keeps working.
-
-    Returns `(alias, wrap, trunc, header)`, where all but `alias` are optional
-    and `trunc` is a `(start, stop)` pair.
+    Returns `(alias, wrap, crop)`, where `crop` is a `(start, stop)` pair.
     """
-    token = token.strip()
-    header = None
-
-    if '=' in token:
-        field_part, header_part = token.split('=', 1)
-        token = field_part.strip()
-        header = header_part.strip()
-
-    alias = token
     wrap = None
-    trunc = None
-    m1 = re.match(r'^(.+?)\((\d+)\)$', alias)
-    m2 = re.match(r'^(.+?)\{([^}]*)\}$', alias)
-    if m1:
-        alias, wrap = m1.group(1), int(m1.group(2))
-    elif m2 and SLICE_BODY_RE.match(m2.group(2)):
-        alias, trunc = m2.group(1), parse_slice_body(m2.group(2))
+    crop = None
 
-    return alias, wrap, trunc, (header or None)
+    while alias and alias[-1] in ')}':
+        opener = '(' if alias[-1] == ')' else '{'
+        idx = alias.rfind(opener)
+        # `idx == 0` would leave an empty field name, so treat it as no hint.
+        if idx <= 0:
+            break
+
+        body = alias[idx + 1:-1]
+        if opener == '(':
+            if not WRAP_BODY_RE.match(body):
+                break
+            wrap = int(body)
+        else:
+            if not SLICE_BODY_RE.match(body):
+                break
+            crop = parse_slice_body(body)
+
+        alias = alias[:idx]
+
+    return alias, wrap, crop
 
 
-def lookup_field_id(name, field_map, alias_map):
-    """Resolve one exact field name to a Jira API field id, or None.
+class FieldSpec:
+    """One output column: what to read, how to shape it, what to call it.
 
-    Resolution priority:
-        1. User alias mapping (`fields-aliases.json`)
-        2. `cf[12345]` shorthand
-        3. Cached field name/clause mapping
+    The column is the unit that grows whenever jql learns a new notation, so
+    everything about one lives here: parsing its token, its deduplication
+    identity, reading its value out of an issue, and rendering it. Adding a
+    hint means adding a slot, a branch in `parse_field_hints`, and a line in
+    `display` -- nothing outside this class needs to know.
     """
-    if name in alias_map:
-        return alias_map[name]
 
-    mcf = CF_RE.match(name)
-    if mcf:
-        return f"customfield_{mcf.group(1)}"
+    __slots__ = ('alias', 'real', 'path', 'header', 'header_override',
+                 'wrap', 'crop')
 
-    return field_map.get(name)
+    def __init__(self, alias, real, path, header, header_override=None,
+                 wrap=None, crop=None):
+        """Store the resolved field, its formatting hints, and its header."""
+        self.alias = alias
+        self.real = real
+        self.path = path
+        self.header = header
+        self.header_override = header_override
+        self.wrap = wrap
+        self.crop = crop
+
+    @classmethod
+    def parse(cls, token, registry):
+        """Build a spec from one field token such as `summary{5,20}=Title`.
+
+        Supported token forms:
+            - `field` for no formatting hint
+            - `field(30)` to wrap output to width 30
+            - `field{30}` to keep the first 30 characters
+            - `field{-30}` to keep the last 30 characters
+            - `field{5,30}` to keep 30 characters starting at index 5 (0-based)
+            - `field{5,}` to keep everything from index 5 onwards
+            - `field=Header` to rename the column header
+
+        Formatting hints belong to the field definition, so they go on the left
+        of the `=`: `summary(30)=Title`. The token is split on its first `=`
+        only, which leaves headers free to contain `=` themselves.
+        """
+        token = token.strip()
+        header_override = None
+
+        if '=' in token:
+            field_part, header_part = token.split('=', 1)
+            token = field_part.strip()
+            header_override = header_part.strip() or None
+
+        alias, wrap, crop = parse_field_hints(token)
+        real, path = registry.resolve(alias)
+
+        if header_override:
+            header = header_override
+        else:
+            default_header = alias if path else registry.display_name(real)
+            header = registry.rename(default_header)
+
+        return cls(alias, real, path, header, header_override, wrap, crop)
+
+    def key(self):
+        """Identity used to drop exactly-duplicated columns.
+
+        Only fully identical specs collapse: `key` and `parent.key` are
+        different columns, and so are two different crops of one custom field.
+        The header override is compared as written rather than as resolved, so
+        an explicit `=Status` stays distinct from the default header.
+        """
+        return (self.real, self.path, self.wrap, self.crop,
+                self.header_override)
+
+    def target(self):
+        """`(field id, path)` pair used to match `--fields-remove` entries."""
+        return (self.real, self.path)
+
+    def query_path(self):
+        """Dot path shown by `--fields-list`."""
+        return '.'.join((self.real,) + self.path)
+
+    def raw_value(self, issue, debug_flags):
+        """Read this column's value out of one issue, cropped but not wrapped.
+
+        Cropping shapes the value itself so it reaches every output format;
+        wrapping is display-only and belongs to `display`.
+        """
+        value = resolve_text_value(issue, self.real, self.path, debug_flags)
+        value = value.strip()
+        if self.crop is not None:
+            value = apply_slice(value, self.crop)
+        return value
+
+    def display(self, value, registry, use_color):
+        """Shape one already-resolved value for the rendered table."""
+        if self.wrap is not None:
+            value = textwrap.fill(value, width=self.wrap)
+        if use_color:
+            value = colorize(registry.color_key(self.real, self.path), value)
+        return value
 
 
-def resolve_field_id(alias, field_map, alias_map):
-    """Resolve a user-entered field token into a field id and a JSON path.
+def build_field_specs(field_string, registry):
+    """Parse a comma-separated field list into `FieldSpec` columns.
 
-    The whole token is tried first, so field names containing dots keep
-    working. Otherwise the longest prefix that resolves becomes the field and
-    the remaining segments become the path used to drill into its JSON value.
-
-    Returns `(real_field_id, path)`, where `path` is a tuple of segments.
-    """
-    direct = lookup_field_id(alias, field_map, alias_map)
-    if direct:
-        return direct, ()
-
-    parts = alias.split('.')
-    for i in range(len(parts) - 1, 0, -1):
-        real = lookup_field_id('.'.join(parts[:i]), field_map, alias_map)
-        if real:
-            return real, tuple(parts[i:])
-
-    return parts[0], tuple(parts[1:])
-
-
-def build_field_specs(field_string, field_map, alias_map, col_rename, id_map):
-    """Build the canonical field specification list for query and rendering.
-
-    Each returned item is `(alias, real_field_id, path, wrap, trunc, header)`.
-    Only fully identical specs are dropped: `key` and `parent.key` resolve to
-    different columns even though both read a key. First-seen order is kept.
+    Exactly duplicated specs are dropped; first-seen order is kept.
     """
     specs = []
     seen = set()
 
     for token in split_field_tokens(field_string):
-        alias, wrap, trunc, header_override = parse_field_token(token)
-        real, path = resolve_field_id(alias, field_map, alias_map)
-
-        spec_id = (real, path, wrap, trunc, header_override)
-        if spec_id in seen:
+        spec = FieldSpec.parse(token, registry)
+        if spec.key() in seen:
             continue
-        seen.add(spec_id)
-
-        if header_override:
-            header = header_override
-        else:
-            default_header = alias if path else id_map.get(real, real)
-            header = col_rename.get(default_header, default_header)
-
-        specs.append((alias, real, path, wrap, trunc, header))
+        seen.add(spec.key())
+        specs.append(spec)
 
     return specs
 
 
-def normalize_field_list(field_values, field_map, alias_map):
+def normalize_field_list(field_values, registry):
     """Normalize one or more field lists into `(field_id, path)` pairs.
 
     This is used by `--fields-remove` so removals match the same resolution
@@ -637,8 +745,7 @@ def normalize_field_list(field_values, field_map, alias_map):
 
     for raw_value in field_values:
         for token in split_field_tokens(raw_value):
-            alias, _, _, _ = parse_field_token(token)
-            target = resolve_field_id(alias, field_map, alias_map)
+            target = FieldSpec.parse(token, registry).target()
 
             if target in seen:
                 continue
@@ -697,23 +804,119 @@ def resolve_output_mode(format_value):
     )
 
 
-def parse_where_clause(clause):
-    """Parse a post-filter clause into a field name, operator, and pattern."""
-    match = re.match(r'^(?P<field>.+?)(?P<op>-~~|-==|-~|-=|==|=|~~|~)(?P<value>.*)$', clause)
-    if not match:
-        raise ValueError('where clauses must use field=value syntax')
+class WhereClause:
+    """One `-w` post-filter: a field, an operator, and a pattern.
 
-    field_name = match.group('field').strip()
-    operator = match.group('op')
-    pattern = match.group('value').strip()
+    What each operator means is a table rather than a chain of conditionals,
+    so adding one is a single row plus whatever `matches` needs to honour it.
+    The field is resolved when the clause is parsed instead of once per issue.
+    """
 
-    if not field_name:
-        raise ValueError('empty field name in where clause')
+    # operator -> (match mode, negated, case sensitive)
+    OPERATORS = {
+        '-~~': ('contains', True, True),
+        '-==': ('exact', True, True),
+        '-~': ('contains', True, False),
+        '-=': ('exact', True, False),
+        '==': ('exact', False, True),
+        '~~': ('contains', False, True),
+        '=': ('exact', False, False),
+        '~': ('contains', False, False),
+    }
 
-    if len(pattern) >= 2 and pattern[0] == pattern[-1] and pattern[0] in "\"'":
-        pattern = pattern[1:-1]
+    # Longest operator first, so `-~~` is never read as `-~` followed by `~`.
+    CLAUSE_RE = re.compile(
+        r'^(?P<field>.+?)(?P<op>'
+        + '|'.join(re.escape(op)
+                   for op in sorted(OPERATORS, key=len, reverse=True))
+        + r')(?P<value>.*)$'
+    )
 
-    return field_name, operator, pattern
+    __slots__ = ('field_name', 'real', 'path', 'pattern', 'mode', 'negate',
+                 'case_sensitive')
+
+    def __init__(self, field_name, real, path, pattern, mode, negate,
+                 case_sensitive):
+        """Store the resolved field and the decoded operator behaviour."""
+        self.field_name = field_name
+        self.real = real
+        self.path = path
+        self.pattern = pattern
+        self.mode = mode
+        self.negate = negate
+        self.case_sensitive = case_sensitive
+
+    @classmethod
+    def parse(cls, clause, registry):
+        """Build a clause from one `-w` argument such as `status=In Progress`.
+
+        A quoted pattern keeps its inner text, so shells that pass the quotes
+        through do not end up matching against them.
+        """
+        match = cls.CLAUSE_RE.match(clause)
+        if not match:
+            raise ValueError('where clauses must use field=value syntax')
+
+        field_name = match.group('field').strip()
+        pattern = match.group('value').strip()
+
+        if not field_name:
+            raise ValueError('empty field name in where clause')
+
+        if len(pattern) >= 2 and pattern[0] == pattern[-1] and pattern[0] in "\"'":
+            pattern = pattern[1:-1]
+
+        mode, negate, case_sensitive = cls.OPERATORS[match.group('op')]
+        real, path = registry.resolve(field_name)
+        return cls(field_name, real, path, pattern, mode, negate,
+                   case_sensitive)
+
+    def matches(self, issue, debug_flags):
+        """Test this clause against one issue's textual field value.
+
+        `*` in a pattern is the only wildcard; everything else is literal.
+        An exact clause anchors the whole value, a contains clause does not.
+        """
+        value = resolve_text_value(issue, self.real, self.path, debug_flags)
+
+        value_text = (value or '').strip()
+        pattern_text = (self.pattern or '').strip()
+
+        if not self.case_sensitive:
+            value_text = value_text.lower()
+            pattern_text = pattern_text.lower()
+
+        if not pattern_text:
+            # An empty pattern asks about presence: `field=` wants an empty
+            # value, `field~` wants any value, and negation flips each.
+            if self.mode == 'contains':
+                return (not value_text) if self.negate else bool(value_text)
+            return bool(value_text) if self.negate else (not value_text)
+
+        regex = re.escape(pattern_text).replace(r'\*', '.*')
+        if self.mode == 'contains':
+            matched = re.search(regex, value_text) is not None
+        else:
+            matched = re.match('^' + regex + '$', value_text) is not None
+
+        return (not matched) if self.negate else matched
+
+
+def flatten_value(value):
+    """Render one decoded Jira value as display text.
+
+    Jira wraps most interesting values in an object: users carry a
+    `displayName`, rich text arrives as an ADF document, and option-like
+    fields use `value` or `name`. Multi-value fields hold a list of exactly
+    those shapes, so both the scalar and the list case share this cascade.
+    """
+    if isinstance(value, dict):
+        if 'displayName' in value:
+            return value['displayName']
+        if value.get('type') == 'doc':
+            return extract_text(value)
+        return value.get('value', value.get('name', str(value)))
+    return str(value)
 
 
 def resolve_text_value(issue, real, path, debug_flags):
@@ -726,66 +929,164 @@ def resolve_text_value(issue, real, path, debug_flags):
     x = data.get(real, '')
     if path:
         return render_path_value(extract_path(x, path))
-    if 'json-objects' in debug_flags:
+    if debug_flags & KEEP_JSON_FLAGS:
         return json.dumps(x)
 
-    if isinstance(x, dict):
-        if 'displayName' in x:
-            return x['displayName']
-        if x.get('type') == 'doc':
-            return extract_text(x)
-        return x.get('value', x.get('name', str(x)))
     if isinstance(x, list):
-        vals = []
-        for it in x:
-            if isinstance(it, dict):
-                if 'displayName' in it:
-                    vals.append(it['displayName'])
-                elif it.get('type') == 'doc':
-                    vals.append(extract_text(it))
-                else:
-                    vals.append(it.get('value', it.get('name', str(it))))
-            else:
-                vals.append(str(it))
-        return ','.join(vals)
+        return ','.join(flatten_value(item) for item in x)
     if x is None:
         return ''
-    return str(x)
+    return flatten_value(x)
 
 
-def matches_where_clause(issue, field_name, operator, pattern, field_map, alias_map, debug_flags):
-    """Match a textual wildcard clause against one issue."""
-    real, path = resolve_field_id(field_name, field_map, alias_map)
-    value = resolve_text_value(issue, real, path, debug_flags)
+# --- Row pipeline -----------------------------------------------------------
 
-    value_text = (value or '').strip()
-    pattern_text = (pattern or '').strip()
+def build_rows(issues, specs, where_clauses, debug_flags):
+    """Turn fetched issues into rows of display strings, applying `-w` filters.
 
-    case_sensitive = operator in ('==', '-==', '~~', '-~~')
-    if not case_sensitive:
-        value_text = value_text.lower()
-        pattern_text = pattern_text.lower()
+    One row holds the raw (cropped, unwrapped, uncolored) text for every
+    column, which is what every output format is built from. Wrapping and
+    color are display concerns and belong to the table renderer.
+    """
+    rows = []
+    for issue in issues:
+        if not all(clause.matches(issue, debug_flags) for clause in where_clauses):
+            continue
+        rows.append([spec.raw_value(issue, debug_flags) for spec in specs])
+    return rows
 
-    is_negated = operator.startswith('-')
 
-    if operator in ('~', '~~', '-~', '-~~'):
-        if not pattern_text:
-            return not bool(value_text) if is_negated else bool(value_text)
-        regex = re.escape(pattern_text).replace(r'\*', '.*')
-        matched = re.search(regex, value_text) is not None
-    else:
-        if not pattern_text:
-            return not value_text if is_negated else not value_text
-        regex = '^' + re.escape(pattern_text).replace(r'\*', '.*') + '$'
-        matched = re.match(regex, value_text) is not None
+def sort_value(value):
+    """Coerce one cell into a sortable key: numbers first, then folded text.
 
-    if is_negated:
-        return not matched
-    return matched
+    Every key is the same shape, so a column that mixes numbers and text stays
+    comparable instead of failing part-way through a sort.
+    """
+    try:
+        return (0, float(value), '')
+    except ValueError:
+        return (1, 0.0, value.lower())
+
+
+def sort_rows(rows, specs, order):
+    """Sort rows in place by a comma-separated `-o` list, `-` meaning descending.
+
+    Columns are matched by alias or by header. Python's sort is stable, so
+    running one pass per key from the least significant to the most gives the
+    same ordering a composite key would, without needing to invert
+    comparisons for descending columns.
+    """
+    order_keys = []
+    for token in order.split(','):
+        token = token.strip()
+        if not token:
+            continue
+        desc = token.startswith('-')
+        fname = token.lstrip('-').strip().lower()
+        col_idx = None
+        for i, spec in enumerate(specs):
+            if spec.alias.lower() == fname or spec.header.lower() == fname:
+                col_idx = i
+                break
+        if col_idx is None:
+            sys.exit(f"Error: sort field '{fname}' not found in output fields")
+        order_keys.append((col_idx, desc))
+
+    for col_idx, desc in reversed(order_keys):
+        rows.sort(key=lambda row: sort_value(row[col_idx]), reverse=desc)
+    return rows
+
+
+# --- Output renderers -------------------------------------------------------
+
+def highlight(text, style, use_color):
+    """Wrap text in a color style, or return it untouched when color is off."""
+    if not use_color:
+        return text
+    return f"{style}{text}{Style.RESET_ALL}"
+
+
+def render_raw(rows, specs, args, registry, use_color, table_format):
+    """Print one separator-joined line per row."""
+    for row in rows:
+        print(args.sep.join(row))
+
+
+def render_json(rows, specs, args, registry, use_color, table_format):
+    """Print rows as a JSON array of objects keyed by normalized headers."""
+    keys = build_json_keys([spec.header for spec in specs])
+    payload = [{key: row[i] for i, key in enumerate(keys)} for row in rows]
+    print(json.dumps(payload, ensure_ascii=False, indent=2))
+
+
+def render_csv(rows, specs, args, registry, use_color, table_format):
+    """Print rows as CSV with a header line."""
+    writer = csv.writer(sys.stdout)
+    writer.writerow([spec.header for spec in specs])
+    writer.writerows(rows)
+
+
+def render_table(rows, specs, args, registry, use_color, table_format):
+    """Print rows as a tabulate table, applying wrapping and color.
+
+    This is the only format that shapes values for display, so wrapping and
+    semantic coloring are applied here rather than when rows are built.
+    """
+    if args.show_query:
+        query = highlight(' '.join(args.jql), Style.BRIGHT + Fore.YELLOW, use_color)
+        print(f"\n{query}\n")
+
+    headers = [highlight(spec.header, Style.BRIGHT + Fore.WHITE, use_color)
+               for spec in specs]
+    display_rows = [
+        [spec.display(value, registry, use_color)
+         for spec, value in zip(specs, row)]
+        for row in rows
+    ]
+
+    if args.numbers:
+        display_rows = [[str(i + 1)] + row for i, row in enumerate(display_rows)]
+        headers = ['#'] + headers
+
+    print(tabulate(display_rows, headers=headers, tablefmt=table_format))
+
+    if args.show_rows_count:
+        count = highlight(f"{len(rows)} rows", Style.BRIGHT + Fore.WHITE, use_color)
+        print(f"\n{count}\n")
+
+
+RENDERERS = {
+    'raw': render_raw,
+    'json': render_json,
+    'csv': render_csv,
+    'table': render_table,
+}
+
 
 # Main
 
-def main():
+def resolve_specs(args, registry):
+    """Build the final column list from `-f`, then `-fa`, then `-fr`."""
+    specs = build_field_specs(args.fields, registry)
+
+    if args.fields_add:
+        extra_specs = build_field_specs(','.join(args.fields_add), registry)
+        seen_fields = set(spec.key() for spec in specs)
+        for spec in extra_specs:
+            if spec.key() in seen_fields:
+                continue
+            specs.append(spec)
+            seen_fields.add(spec.key())
+
+    if args.fields_remove:
+        remove_fields = set(normalize_field_list(args.fields_remove, registry))
+        specs = [spec for spec in specs if spec.target() not in remove_fields]
+
+    return specs
+
+
+def build_parser():
+    """Build the command-line parser."""
     """CLI entry point.
 
     Responsibilities:
@@ -795,8 +1096,6 @@ def main():
         - Optionally print final field list (`--fields-list`)
         - Query Jira and render selected output format
     """
-    api = os.getenv('JIRA_URL', '').rstrip('/')
-    auth = HTTPBasicAuth(os.getenv('JIRA_USER', ''), os.getenv('JIRA_API_TOKEN', ''))
     parser = argparse.ArgumentParser(
         formatter_class=argparse.RawDescriptionHelpFormatter,
         description=__doc__
@@ -804,10 +1103,8 @@ def main():
     parser.add_argument(
         '-f', '--fields',
         default='key,issuetype(15),priority,status(15),summary(30),assignee(15)',
-        help='Fields list; supports dot paths into JSON fields, inline headers, '
-             'wrapping with field(N), and slicing with field{N} (first N chars), '
-             'field{-N} (last N chars), field{I,N} (N chars from 0-based index I) '
-             'or field{I,} (from I to the end); '
+        help='Fields list; supports dot paths, inline headers and the (N)/{...} '
+             'hints described under "Field notation" above; '
              'e.g. parent.fields.summary(30)=Epic, cf[10813]{0,10}=Tr Date '
              '(default: key,issuetype(15),priority,status(15),summary(30),assignee(15))'
     )
@@ -875,7 +1172,11 @@ def main():
         action='append',
         default=[],
         metavar='FIELD[OP]VALUE',
-        help='Post-filter results after fetching data using textual matching; repeat to combine with AND. Supported operators: =, -=, ~, ==, -==, ~~ (default: =). Double operators are case-sensistive, minus mean negation. Example: -w status="In Progress" -w assignee~"Paulo"'
+        help='Post-filter results after fetching data using textual matching; '
+             'repeat to combine with AND. Operators: = exact, ~ contains '
+             '(default: =); double them for case-sensitive (==, ~~); prefix '
+             'with - to negate (-=, -~, -==, -~~). * is a wildcard. '
+             'Example: -w status="In Progress" -w assignee~"Paulo"'
     )
     parser.add_argument(
         '-d', '--debug',
@@ -892,167 +1193,65 @@ def main():
         'jql', nargs='*',
         help='The JQL query to execute'
     )
+    return parser
+
+
+def main():
+    """CLI entry point.
+
+    Responsibilities:
+        - Parse command-line arguments
+        - Handle maintenance commands (jira field listing/cache update)
+        - Resolve final field set (`--fields`, `--fields-add`, `--fields-remove`)
+        - Optionally print final field list (`--fields-list`)
+        - Query Jira and render selected output format
+    """
+    api = os.getenv('JIRA_URL', '').rstrip('/')
+    auth = HTTPBasicAuth(os.getenv('JIRA_USER', ''), os.getenv('JIRA_API_TOKEN', ''))
+    client = JiraClient(api, auth)
+    parser = build_parser()
     args = parser.parse_args()
 
-    debug_flags = [f.strip() for f in args.debug.split(',') if f.strip()]
+    debug_flags = {f.strip() for f in args.debug.split(',') if f.strip()}
 
     if args.jira_fields:
         if args.jira_fields == 'update':
-            update_field_cache(api, auth)
-        list_fields(api, auth, args.jira_fields)
+            load_field_cache(client, refresh=True)
+        list_fields(client, args.jira_fields)
 
     if not args.jql:
         parser.error('JQL query required')
 
-    field_map, alias_map, col_rename = load_maps()
-    if not field_map:
-        update_field_cache(api, auth)
-        field_map, alias_map, col_rename = load_maps()
+    registry = FieldRegistry.load(client)
 
     try:
-        where_clauses = [parse_where_clause(clause) for clause in args.where]
+        where_clauses = [WhereClause.parse(clause, registry)
+                         for clause in args.where]
     except ValueError as exc:
         parser.error(str(exc))
 
-    id_map = fetch_id_map(api, auth)
-
-    specs = build_field_specs(args.fields, field_map, alias_map, col_rename, id_map)
-
-    if args.fields_add:
-        extra_specs = build_field_specs(','.join(args.fields_add), field_map, alias_map, col_rename, id_map)
-        seen_fields = set((real, path, wrap, trunc, header) for _, real, path, wrap, trunc, header in specs)
-        for spec in extra_specs:
-            spec_id = (spec[1], spec[2], spec[3], spec[4], spec[5])
-            if spec_id in seen_fields:
-                continue
-            specs.append(spec)
-            seen_fields.add(spec_id)
-
-    if args.fields_remove:
-        remove_fields = set(normalize_field_list(args.fields_remove, field_map, alias_map))
-        specs = [spec for spec in specs if (spec[1], spec[2]) not in remove_fields]
+    specs = resolve_specs(args, registry)
 
     if args.fields_list:
-        print(','.join('.'.join((real,) + path) for _, real, path, _, _, _ in specs))
+        print(','.join(spec.query_path() for spec in specs))
         return
 
     # Only the root field is requested from Jira; paths are applied locally.
-    query_fields = list(dict.fromkeys(real for _, real, _, _, _, _ in specs))
-    for field_name, _, _ in where_clauses:
-        real, _ = resolve_field_id(field_name, field_map, alias_map)
-        if real not in query_fields:
-            query_fields.append(real)
+    query_fields = list(dict.fromkeys(spec.real for spec in specs))
+    for clause in where_clauses:
+        if clause.real not in query_fields:
+            query_fields.append(clause.real)
 
-    url = f"{api}/rest/api/3/search/jql"
-    params = {'jql': ' '.join(args.jql), 'fields': ','.join(query_fields)}
-    issues = fetch_issues(url, auth, params, args.limit)
+    issues = client.search(' '.join(args.jql), query_fields, args.limit)
 
-    rows_raw = []
-    rows_vis = []
-    
-    # Determine if color should be used
-    use_color = args.color == 'always' or (args.color == 'auto' and sys.stdout.isatty())
-    
-    for issue in issues:
-        if where_clauses and not all(
-            matches_where_clause(issue, field_name, operator, pattern, field_map, alias_map, debug_flags)
-            for field_name, operator, pattern in where_clauses
-        ):
-            continue
-
-        row_r = []
-        row_v = []
-        for _, real, path, wrap, trunc, _ in specs:
-            val = resolve_text_value(issue, real, path, debug_flags).strip()
-            # Slicing shapes the value itself, so it reaches every output
-            # format; wrapping only ever affects the rendered table.
-            if trunc is not None:
-                val = apply_slice(val, trunc)
-            row_r.append(val)
-            if wrap is not None:
-                vis_val = textwrap.fill(val, width=wrap)
-            else:
-                vis_val = val
-            
-            # Colorize if enabled
-            if use_color:
-                vis_val = colorize(color_key(real, path, id_map), vis_val)
-            
-            row_v.append(vis_val)
-        rows_raw.append(row_r)
-        rows_vis.append(row_v)
+    rows = build_rows(issues, specs, where_clauses, debug_flags)
 
     if args.order:
-        order_keys = []
-        for token in args.order.split(','):
-            token = token.strip()
-            if not token:
-                continue
-            desc = token.startswith('-')
-            fname = token.lstrip('-').strip().lower()
-            col_idx = None
-            for i, (alias, real, path, wrap, trunc, header) in enumerate(specs):
-                if alias.lower() == fname or header.lower() == fname:
-                    col_idx = i
-                    break
-            if col_idx is None:
-                sys.exit(f"Error: sort field '{fname}' not found in output fields")
-            order_keys.append((col_idx, desc))
-
-        def _sort_key(pair):
-            row_r = pair[0]
-            key = []
-            for col_idx, desc in order_keys:
-                val = row_r[col_idx]
-                try:
-                    v = float(val)
-                except ValueError:
-                    v = val.lower()
-                key.append(_Reversed(v) if desc else v)
-            return key
-
-        paired = sorted(zip(rows_raw, rows_vis), key=_sort_key)
-        rows_raw, rows_vis = (list(x) for x in zip(*paired)) if paired else ([], [])
+        sort_rows(rows, specs, args.order)
 
     output_mode, table_format = resolve_output_mode(args.format)
-    base_headers = [h for _, _, _, _, _, h in specs]
-
-    if output_mode == 'raw':
-        for r in rows_raw:
-            print(args.sep.join(r))
-    elif output_mode == 'json':
-        keys = build_json_keys(base_headers)
-        payload = []
-        for row in rows_raw:
-            payload.append({key: row[i] for i, key in enumerate(keys)})
-        print(json.dumps(payload, ensure_ascii=False, indent=2))
-    elif output_mode == 'csv':
-        writer = csv.writer(sys.stdout)
-        writer.writerow(base_headers)
-        writer.writerows(rows_raw)
-    else:
-        if args.show_query:
-            if use_color:
-                print(f"\n{Style.BRIGHT}{Fore.YELLOW}{' '.join(args.jql)}{Style.RESET_ALL}\n")
-            else:
-                print(f"\n{' '.join(args.jql)}\n")
-        if use_color:
-            headers = [f"{Style.BRIGHT}{Fore.WHITE}{h}{Style.RESET_ALL}" for _,_,_,_,_,h in specs]
-        else:
-            headers = [h for _,_,_,_,_,h in specs]
-        if args.numbers:
-            rows_vis = [[str(i+1)] + r for i, r in enumerate(rows_vis)]
-            headers = ['#'] + headers
-        print(tabulate(
-            rows_vis,
-            headers=headers,
-            tablefmt=table_format
-        ))
-        if args.show_rows_count:
-            if use_color:
-                print(f"\n{Style.BRIGHT}{Fore.WHITE}{len(rows_raw)} rows{Style.RESET_ALL}\n")
-            else:
-                print(f"\n{len(rows_raw)} rows\n")
+    use_color = args.color == 'always' or (args.color == 'auto' and sys.stdout.isatty())
+    RENDERERS[output_mode](rows, specs, args, registry, use_color, table_format)
 
 if __name__ == '__main__':
     main()
