@@ -1,0 +1,116 @@
+#!/bin/bash
+
+TARGET_PID=""
+TARGET_NAME=""
+
+while :; do
+
+    clear
+
+    if [ ! -z "$TARGET_PID" ]; then
+        
+        # An app was intended to be killed during the last loop. Let's
+        # wait a bit
+
+        for i in {1..20}; do
+            kill -0 "$TARGET_PID" > /dev/null 2>&1 || break
+            sleep 0.1
+        done
+
+        if kill -0 "$TARGET_PID" > /dev/null 2>&1 ; then
+            printf "${cRed}Error:${c0} ${TARGET_NAME} (${TARGET_PID}) could not be killed."
+        else
+            printf "${cGreen}Success:${c0} ${TARGET_NAME} (${TARGET_PID}) killed succesfully!"
+        fi
+
+        TARGET_PID=""
+        TARGET_NAME=""
+
+        printf "\n\n"
+    fi
+
+    printf "${cWhite}Choose an active app to kill${c0} ${cGrey}Ctrl+C to exit${c0}\n\n"
+
+    UNSORTED_APPS=()
+
+    # Add all apps visible in the task switcher and the dock to UNSORTED_APPS
+
+    RAW_LIST_STRING=$(osascript -e 'tell application "System Events" to get {name, unix id} of (every process whose background only is false)' 2>&1 | sed "s/, /,/g")
+    
+    IFS=',' read -r -a RAW_ARRAY <<< "$RAW_LIST_STRING"
+    COUNT_ALL=${#RAW_ARRAY[@]}
+
+    if [ "$COUNT_ALL" == "0" ]; then
+        echo "No apps to kill"
+        exit 0;
+    fi
+
+    COUNT=$(( COUNT_ALL/2 ))
+
+    for (( i=0; i<COUNT; i++ )); do
+        app_name="${RAW_ARRAY[i]}"
+        app_pid="${RAW_ARRAY[i+COUNT]}"
+
+        if [ "$app_name" = "app_mode_loader" ]; then
+            app_name=$(ps -p $app_pid -o command= | sed -E 's|.*/([^/]+)\.app/.*|\1|')
+        fi
+
+        UNSORTED_APPS+=("${app_pid}"$'\t'"${app_name}")
+    done
+
+    # Add more apps, that are not available in the dock or task switcher but feature in the system tray
+
+    TRAY_DATA=$(lsappinfo list 2>&1 | awk '
+    BEGIN{RS="\n[0-9]+\\) "}
+    /type="UIElement"/ {
+        name=""; bid=""; path=""; pid=""
+        if (match($0, /^"[^"]*"/)) name = substr($0, RSTART+1, RLENGTH-2)
+        if (match($0, /bundleID="[^"]*"/)) { s=substr($0,RSTART,RLENGTH); sub(/bundleID="/,"",s); sub(/"$/,"",s); bid=s
+    }
+        if (match($0, /bundle path="[^"]*"/)) { s=substr($0,RSTART,RLENGTH); sub(/bundle path="/,"",s); sub(/"$/,"",s);
+    path=s }
+        if (match($0, /pid = [0-9]+/)) { s=substr($0,RSTART,RLENGTH); sub(/pid = /,"",s); pid=s }
+        if (bid !~ /^com\.apple\./ && (path ~ /^\/Applications/ || path ~ /^\/Users\//)) {
+            printf "%s\t%s\n", pid, name
+        }
+    }
+    ')
+
+    # Some apps in the tray have a policy to stay alive even after killed, so I need to map them
+    # to uregister before kill
+    KEEPALIVE_MAP=()
+
+    while IFS=$'\t' read -r tray_pid tray_name; do
+        if [ -z "$tray_pid" ]; then
+            continue
+        fi
+        keep_alive=""
+        launchd_label=$(launchctl list | grep "^${tray_pid}"$'\t' | awk '{print $3}')
+        if [ ! -z "$launchd_label" ]; then
+            if [ "$(launchctl print "gui/$(id -u)/${launchd_label}" 2>/dev/null | grep -i 'keepalive')" != "" ]; then
+                keep_alive="(keepalive)"
+                KEEPALIVE_MAP+=("${tray_pid}"$'\t'"${launchd_label}")
+            fi
+        fi
+        UNSORTED_APPS+=("${tray_pid}"$'\t'"${tray_name} ${cPurple}(tray)${c0} ${cYellow}${keep_alive}${c0}")
+    done <<< "$TRAY_DATA"
+
+    # sort the array APPS by the second field (delimited by \t) case insensitive
+    APPS=()
+    while IFS= read -r app_line; do
+        APPS+=("$app_line")
+    done < <(printf '%s\n' "${UNSORTED_APPS[@]}" | sort -t $'\t' -k2,2f)
+
+    menu APP_TO_KILL "${APPS[@]}";
+    if [ ! -z "${APP_TO_KILL}" ]; then
+        TARGET_NAME=$(printf '%s' "$APP_TO_KILL" | awk -F\t '{ print $2; }')
+        TARGET_PID=$(printf '%s' "$APP_TO_KILL" | awk -F\t '{ print $1; }')
+        
+        keepalive_label=$(printf '%s\n' "${KEEPALIVE_MAP[@]}" | grep "^${TARGET_PID}"$'\t' | cut -f2)
+        if [ -z "$keepalive_label" ]; then
+            kill -9 $TARGET_PID
+        else
+            launchctl bootout "gui/$(id -u)/${keepalive_label}"
+        fi
+    fi
+done
