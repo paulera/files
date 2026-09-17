@@ -26,21 +26,29 @@ while :; do
 
     if [[ "$(file $(which ping))" == *"Mach-O"* ]] || [ x"$(ping --help |& grep '\-c <count>')" != "x" ]; then
         # Apple's ping executable
-        RESULT=$(ping $TARGET -c 1)
+        RESULT=$(ping $TARGET -c 1 2>&1)
     else
-        RESULT=$(ping $TARGET -n 1)
+        RESULT=$(ping $TARGET -n 1 2>&1)
     fi
 
-    echo -ne "\r${c0}$(now long) "
-    if [[ $RESULT =~ ^.*could\ not\ find\ host.*$ ]]; then
+    NOW=$(now long)
+
+    #echo -ne "\r${c0}$(now long) "
+    if [[ $RESULT =~ ^.*cannot\ resolve\ .*:\ Unknown\ host$ ]]; then
+        title $TARGET" (._.)"i
+        echo -ne "\r${c0}${NOW} ${c0}${cRed}UNKNOWN HOST (can't resolve ${TARGET})${c0}"
+        echo -ne " (._.)"
+    elif [[ $RESULT =~ ^.*could\ not\ find\ host.*$ ]]; then
         title $TARGET" (x_x)"
-        echo -ne "${cRed}CAN'T FIND HOST${c0}"
-        echo -n " (x_x)\n"
-    elif [[ $RESULT =~ ^.*Destination\ net\ unreachable.*$ ]]; then
-        echo -ne "${cYellow}DESTINATION UNREACHABLE${c0}"
-        echo -n " (O.o)\n"
+        echo -ne "\r${c0}${NOW} ${cRed}CAN'T FIND HOST${c0}"
+        echo -ne " (x_x)"
+    elif [[ $RESULT =~ ^.*Destination\ not\ unreachable.*$ ]]; then
+        echo -ne "\r${c0} ${cRed}DESTINATION UNREACHABLE${c0}"
+        echo -ne " (O.o)"
     elif [[ $RESULT =~ .*\ from\ .* ]]; then
-        
+ 
+        echo -ne "\n${c0}${NOW} "
+
         IP=$(echo "$RESULT" | grep " from " | awk -F"from " '{ print $2 }' | awk -F: '{ print $1 }')
         SHORTTIME=$(echo "$RESULT" | grep time= | awk -Ftime= '{ print $2 }' | awk -Fms '{ print $1 }' | awk -F\. '{ print $1 }')
 
@@ -86,7 +94,7 @@ while :; do
             bar $(( $SHORTTIME - $AVER ))
         fi
 
-        echo -ne "${c0}\n"
+#        echo -ne "${c0}\n"
         
         sleep 0.5s
 
